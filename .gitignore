@@ -1,0 +1,21 @@
+# Secrets
+.env
+*.key
+.sfdx/
+.sf/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Salesforce local
+.localdevserver/
+deploy-options.json

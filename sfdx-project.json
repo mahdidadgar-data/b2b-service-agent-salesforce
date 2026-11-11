@@ -1,0 +1,11 @@
+{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true
+    }
+  ],
+  "name": "b2b-service-agent-salesforce",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com"
+}

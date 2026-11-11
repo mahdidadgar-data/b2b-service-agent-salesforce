@@ -1,0 +1,5 @@
+# Files the Salesforce CLI should never deploy to or retrieve from the org
+**/.eslintrc.json
+**/jsconfig.json
+**/__tests__/**
+**/.gitkeep
