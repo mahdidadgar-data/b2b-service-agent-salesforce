@@ -50,7 +50,11 @@ becomes the main demo.
 - GitHub: https://github.com/mahdidadgar-data/b2b-service-agent-salesforce (branch `main`).
 
 ## Progress log
-- **Day 1 (11 Nov):** setup done: Dev org, CLI auth, Salesforce DX project skeleton, first commit `908cf06`.
+- **Step 1 (11 Nov):** setup done: Dev org, CLI auth, Salesforce DX project skeleton, first commit `908cf06`.
+- **Step 2 (11 Nov):** use-case brief v1.0 agreed (`docs/use-case-brief.md`), commit `28d4bf5`.
+- **Step 3 (11 Nov):** data foundation: 19 custom fields + permission set `Delta_Data_Access` deployed;
+  synthetic data loaded (29 products, 12 accounts, 16 contacts, 40 activated orders, 91 order items,
+  4 cases, 3 opportunities). Customer key: `Account.Customer_Number__c` (C-1001…C-1012); order key: `Order.Name` (SO-…).
 
 ## Timeline
 | Day | Date | Goal |
@@ -67,3 +71,9 @@ becomes the main demo.
 - Never commit secrets (`.env`, auth files, API keys). Use `.env` locally and keep `.env.example` in Git.
 - Python 3, with dependencies in `requirements.txt`.
 - Write in plain, professional English.
+- **Salesforce API access from Python goes through the CLI** (`data/sf_cli.py`). CLI 2.157 redacts the
+  access token, so never try to extract, print or store a token.
+- **Validate before loading:** run `data/preflight.py` before `data/load_data.py` whenever the generator changes.
+- **Learning log:** after each step, add a section to `docs/learning-log.md` (what was done, what was
+  learned, problems and solutions, link to the FDE role, possible interview questions). At the end it
+  becomes a printable PDF with a full interview-question section. Keep the steps in order (Step 1, 2, 3, ...).

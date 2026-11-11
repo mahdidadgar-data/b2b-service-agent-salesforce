@@ -1,0 +1,110 @@
+[
+  {
+    "Customer_Number__c": "C-1001",
+    "Name": "Van der Berg Installatietechniek B.V.",
+    "Customer_Segment__c": "Installer",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Utrecht",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1002",
+    "Name": "Bouwbedrijf Hoekstra B.V.",
+    "Customer_Segment__c": "Contractor",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Zwolle",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1003",
+    "Name": "Klimaatwerk Rotterdam B.V.",
+    "Customer_Segment__c": "Installer",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Rotterdam",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1004",
+    "Name": "FMS Facility Services Nederland",
+    "Customer_Segment__c": "Facility Management",
+    "Type": "Customer - Direct",
+    "Industry": "Manufacturing",
+    "BillingCity": "Amersfoort",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1005",
+    "Name": "Peeters Technieken BV",
+    "Customer_Segment__c": "Installer",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Antwerpen",
+    "BillingCountry": "Belgium"
+  },
+  {
+    "Customer_Number__c": "C-1006",
+    "Name": "Noordzee Procesindustrie B.V.",
+    "Customer_Segment__c": "Industrial",
+    "Type": "Customer - Direct",
+    "Industry": "Manufacturing",
+    "BillingCity": "Delfzijl",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1007",
+    "Name": "De Wit & Zonen Loodgieters",
+    "Customer_Segment__c": "Installer",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Eindhoven",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1008",
+    "Name": "Bouwcombinatie A12 V.O.F.",
+    "Customer_Segment__c": "Contractor",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Arnhem",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1009",
+    "Name": "Maes Facility Group NV",
+    "Customer_Segment__c": "Facility Management",
+    "Type": "Customer - Direct",
+    "Industry": "Manufacturing",
+    "BillingCity": "Gent",
+    "BillingCountry": "Belgium"
+  },
+  {
+    "Customer_Number__c": "C-1010",
+    "Name": "Brabant Food Processing B.V.",
+    "Customer_Segment__c": "Industrial",
+    "Type": "Customer - Direct",
+    "Industry": "Manufacturing",
+    "BillingCity": "Tilburg",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1011",
+    "Name": "Jansen Duurzame Installaties",
+    "Customer_Segment__c": "Installer",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Haarlem",
+    "BillingCountry": "Netherlands"
+  },
+  {
+    "Customer_Number__c": "C-1012",
+    "Name": "Smit Utiliteitsbouw B.V.",
+    "Customer_Segment__c": "Contractor",
+    "Type": "Customer - Direct",
+    "Industry": "Construction",
+    "BillingCity": "Leeuwarden",
+    "BillingCountry": "Netherlands"
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "_order": "SO-10443",
+    "_account": "C-1001",
+    "Subject": "Damaged goods: cracked fittings",
+    "Description": "Three press fittings arrived cracked. Photos available.",
+    "Priority": "High",
+    "Status": "New",
+    "Origin": "Email",
+    "Created_By_Agent__c": "Human"
+  },
+  {
+    "_order": "SO-10444",
+    "_account": "C-1002",
+    "Subject": "Wrong item delivered",
+    "Description": "We received DN20 ball valves instead of DN25.",
+    "Priority": "Medium",
+    "Status": "New",
+    "Origin": "Email",
+    "Created_By_Agent__c": "Human"
+  },
+  {
+    "_order": "SO-10445",
+    "_account": "C-1003",
+    "Subject": "Missing item in delivery",
+    "Description": "Delivery was complete except for the pipe clamps.",
+    "Priority": "Medium",
+    "Status": "New",
+    "Origin": "Email",
+    "Created_By_Agent__c": "Human"
+  },
+  {
+    "_order": "SO-10458",
+    "_account": "C-1008",
+    "Subject": "Return request: excess quantity",
+    "Description": "Ordered too much insulation, want to return 10 lengths unopened.",
+    "Priority": "Low",
+    "Status": "New",
+    "Origin": "Email",
+    "Created_By_Agent__c": "Human"
+  }
+]

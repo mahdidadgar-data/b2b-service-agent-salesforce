@@ -19,3 +19,6 @@ Thumbs.db
 # Salesforce local
 .localdevserver/
 deploy-options.json
+
+# Claude Code personal settings (local permissions, not for the repo)
+.claude/settings.local.json

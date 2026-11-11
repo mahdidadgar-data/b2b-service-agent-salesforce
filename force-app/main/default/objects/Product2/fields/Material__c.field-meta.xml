@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Material__c</fullName>
+    <label>Material</label>
+    <type>Text</type>
+    <length>60</length>
+    <required>false</required>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <inlineHelpText>Main material, e.g. stainless steel AISI 316, brass, PVC.</inlineHelpText>
+</CustomField>

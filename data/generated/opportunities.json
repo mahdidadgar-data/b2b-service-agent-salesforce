@@ -1,0 +1,32 @@
+[
+  {
+    "_account": "C-1002",
+    "Name": "Quote: ball valves for school renovation Zwolle",
+    "StageName": "Prospecting",
+    "CloseDate": "2026-12-02",
+    "Requested_Items__c": "40x Ball Valve Brass DN25, 10x Ball Valve Brass DN50",
+    "Delivery_Location__c": "Zwolle, Campus Noord",
+    "Requested_Delivery_Date__c": "2026-12-16",
+    "LeadSource": "Web"
+  },
+  {
+    "_account": "C-1006",
+    "Name": "Quote: stainless valves for process line 3",
+    "StageName": "Prospecting",
+    "CloseDate": "2026-12-16",
+    "Requested_Items__c": "12x Ball Valve Stainless DN50, 12x Threaded Tee Stainless DN50",
+    "Delivery_Location__c": "Delfzijl, Plant 2",
+    "Requested_Delivery_Date__c": "2026-12-30",
+    "LeadSource": "Web"
+  },
+  {
+    "_account": "C-1008",
+    "Name": "Quote: pumps for apartment block A12-West",
+    "StageName": "Prospecting",
+    "CloseDate": "2026-12-26",
+    "Requested_Items__c": "6x Circulation Pump DP-200",
+    "Delivery_Location__c": "Arnhem, A12-West",
+    "Requested_Delivery_Date__c": "2027-01-09",
+    "LeadSource": "Web"
+  }
+]
