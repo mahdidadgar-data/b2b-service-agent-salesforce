@@ -26,6 +26,30 @@
         </connector>
     </assignments>
     <assignments>
+        <description>Guardrail (v2): a blank customer number or order number never reaches the record lookups.</description>
+        <name>Set_Not_Found_Blank_Input</name>
+        <label>Set Not Found (Blank Input)</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <assignmentItems>
+            <assignToReference>orderFound</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>message</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>notFoundMessage</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>END_ELEMENT_1</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
         <name>Set_Not_Found_Order</name>
         <label>Set Not Found (Order)</label>
         <locationX>0</locationX>
@@ -129,6 +153,39 @@
             </conditions>
             <connector>
                 <targetReference>Get_Order</targetReference>
+            </connector>
+            <label>Yes</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <description>Guardrail (v2): continue only if both inputs are filled. A blank value in a Get Records filter would match records where that field is empty.</description>
+        <name>Inputs_Provided</name>
+        <label>Inputs Provided?</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <defaultConnector>
+            <targetReference>Set_Not_Found_Blank_Input</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>No</defaultConnectorLabel>
+        <rules>
+            <name>Yes_Inputs</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>customerNumber</leftValueReference>
+                <operator>IsBlank</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>orderNumber</leftValueReference>
+                <operator>IsBlank</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Get_Account</targetReference>
             </connector>
             <label>Yes</label>
         </rules>
@@ -241,7 +298,7 @@
         <locationX>0</locationX>
         <locationY>0</locationY>
         <connector>
-            <targetReference>Get_Account</targetReference>
+            <targetReference>Inputs_Provided</targetReference>
         </connector>
     </start>
     <status>Active</status>

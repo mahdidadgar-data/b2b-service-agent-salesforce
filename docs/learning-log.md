@@ -399,8 +399,40 @@ All 5 checks pass: the 4 tests plus "b and c return an identical message".
 |---|---|---|
 | Output name | I expected an output called `notFoundMessage`, but that is the *constant*. The output variable is `message`, which receives the constant's text | Tests check `message`. Constants are never outputs |
 | **Order Name is not unique** | `Order.Name` is a free-text field. Two orders with the same name in one account would make *Get Order* (first record only) return an arbitrary one. It is unique in my data only because the generator makes it so | For production: a unique external-ID order number field, or a duplicate rule on Order Name |
-| Empty customer number | A *Get Records* filter "equals {!customerNumber}" with an empty value matches records where the field is empty. It returns "not found" today only because **every** Account in this org has a customer number | Added test d) as a regression check. Hardening: return "not found" straight away when an input is blank |
-| Where the customer number comes from | The flow trusts its `customerNumber` input. If the agent took that number from the chat, a user could type another company's number | In production, take the account from the logged-in portal user (Contact → Account), never from user input |
+| Empty customer number | A *Get Records* filter "equals {!customerNumber}" with an empty value matches records where the field is empty. It returns "not found" today only because **every** Account in this org has a customer number | Added test d) as a regression check. **Fixed in version 2** (see *Hardening (v2)* below) |
+| Where the customer number comes from | The flow trusts its `customerNumber` input. If the agent took that number from the chat, a user could type another company's number | Documented limitation, to be solved in Step 5 (agent configuration): take the account from the logged-in portal user (Contact → Account), never from user input |
+
+### Hardening (v2)
+**Why test d) existed.** In version 1, an empty customer number went straight into *Get
+Account*, whose filter then became "`Customer_Number__c` equals empty". That matches **any**
+Account without a customer number. The flow returned "not found" only because every Account in
+this org happens to have a customer number. That is **safe by data, not safe by design**: the
+guardrail would break without any warning the day someone adds an Account without a number
+(a prospect, a sample record, a data migration). Anyone who sent a blank customer number
+could then see that account's orders. A blank order number had a similar weak spot inside an
+account.
+
+**The fix.** Version 2 adds a first decision, *Inputs Provided?*, right after Start. It
+continues only if `customerNumber` **and** `orderNumber` are both not blank (`IsBlank` covers
+empty, null and whitespace). Otherwise it goes to *Set Not Found (Blank Input)*, which returns
+the same not-found message as the other two paths. The decision **fails closed**: only the
+explicit "Yes" path continues, and everything else ends in "not found".
+
+**Made as code, deployed as version 2.** I edited the flow XML in Git and reviewed the diff
+(1 new decision, 1 new assignment, the Start connector moved). Then I deployed:
+```powershell
+sf project deploy start --source-dir force-app/main/default/flows
+```
+Salesforce saved the change as **version 2 and made it active**. Version 1 is kept as
+*Obsolete*, so it is still available for a rollback. I re-ran the API tests (all pass), then
+retrieved the flow again and confirmed the retrieved file was identical to my edit, so Git
+matches the org exactly. Two caveats:
+- **Black-box tests can't see the path.** Test d) passed in v1 *and* v2, because the output is
+  the same by design. What changed is the reason: v2 stops at the guard and no longer depends
+  on the data. Flow Builder's Debug mode shows which path the flow took.
+- **Developer org vs production.** In this Developer org the flow deployed straight as active.
+  In a client's production org, settings can make deployed flows inactive or require test
+  coverage, so check that before a client deployment.
 
 ### Link to the FDE role
 Agent actions are where an FDE turns business rules into safe, testable building blocks. The
@@ -419,6 +451,8 @@ client's security and architecture reviewers ask for.
 - *The flow was built in the UI. How do you get it under version control and into another org?*
 - *What are the limitations of looking up an order by its name?*
 - *What would you check in a code review of an agent action?*
+- *Your guardrail test passed. How do you know it passed for the right reason? ("safe by data" vs "safe by design")*
+- *How do you change a flow that is already live, and how would you roll it back?*
 
 ---
 

@@ -55,6 +55,11 @@ becomes the main demo.
 - **Step 3 (11 Nov):** data foundation: 19 custom fields + permission set `Delta_Data_Access` deployed;
   synthetic data loaded (29 products, 12 accounts, 16 contacts, 40 activated orders, 91 order items,
   4 cases, 3 opportunities). Customer key: `Account.Customer_Number__c` (C-1001…C-1012); order key: `Order.Name` (SO-…).
+  Commit `3e72e4f`.
+- **Step 4 (11 Nov):** first agent action: flow `Get_Order_Status` (built in Flow Builder, retrieved to Git),
+  API tests in `tests/run_flow_tests.py`, screenshots. Commit `469e83c`.
+- **Step 4b (11 Nov):** flow hardened as version 2 (blank-input guard), deployed from Git; v2 active, v1 obsolete.
+  Open limitation for Step 5: the customer number must come from the logged-in user, not from the chat.
 
 ## Timeline
 | Day | Date | Goal |

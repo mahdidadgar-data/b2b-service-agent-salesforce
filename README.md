@@ -9,13 +9,14 @@ evaluation set and monitoring.
 > end to end, following the Forward Deployed Engineer way of working.
 
 ## Status
-🚧 In progress: Day 1 (setup).
+🚧 In progress: Step 4 of 9 done.
 
 ## Planned structure
 | Folder | Contents |
 |---|---|
 | `force-app/` | Salesforce metadata (objects, Flows, Apex, agent), deployed with the Salesforce CLI |
 | `data/` | Python scripts that generate synthetic B2B data |
+| `tests/` | API tests for the agent actions (Flows), run through the Salesforce CLI |
 | `claude_agent/` | Claude agent connected to Salesforce through MCP / REST API |
 | `evals/` | Test set, evaluation script and quality/cost report |
 | `docs/` | Use-case brief, architecture diagram, demo script |
