@@ -291,4 +291,135 @@ them.
 
 ---
 
+## Step 4 (Day 1, 11 Nov 2026): First agent action - Get Order Status flow
+
+### Goal
+Build the first action the agent can call for UC1 (order and delivery status): given a
+customer number and an order number, return the delivery details, but **only** if the order
+belongs to that customer.
+
+### What I did
+1. **Built the flow by hand in Flow Builder** as an *Autolaunched Flow* (no trigger: it runs
+   only when something calls it, such as an agent or an API).
+
+   ![Get Order Status flow in Flow Builder](images/get-order-status-flow.png)
+
+2. **Tested it in Flow Builder's Debug mode** before activating it. The run below is the
+   guardrail case: customer `C-1001` asks for order `SO-10447`, which belongs to `C-1004`.
+   *Get Account* finds C-1001, but *Get Order* filters on `Name = SO-10447 AND AccountId =
+   C-1001's Id` and finds nothing ("Failed to find records"), so the flow takes the *No* path
+   to *Set Not Found (Order)*.
+
+   ![Debug run of the guardrail case](images/get-order-status-guardrail-debug.png)
+
+3. **Activated the flow and retrieved it into Git**, so the hand-built flow becomes reviewable
+   source code:
+   ```powershell
+   sf project retrieve start --metadata Flow:Get_Order_Status
+   ```
+   Result: `force-app/main/default/flows/Get_Order_Status.flow-meta.xml`.
+4. **Tested it through the REST API**, the same way an agent or integration calls it: the
+   invocable-action endpoint, called through the CLI.
+   ```powershell
+   sf api request rest /services/data/v62.0/actions/custom/flow/Get_Order_Status --method POST --body "@tests/flows/get_order_status/a_own_order.json"
+   ```
+   The request bodies are in `tests/flows/get_order_status/`. `tests/run_flow_tests.py` runs
+   all of them and checks the outputs (exit code 1 on failure):
+   ```powershell
+   .venv\Scripts\python.exe tests\run_flow_tests.py
+   ```
+
+### The flow design
+**Inputs and outputs** (flow variables marked "Available for input/output"):
+
+| Variable | Direction | Type | Meaning |
+|---|---|---|---|
+| `customerNumber` | input | Text | The customer, e.g. `C-1001` |
+| `orderNumber` | input | Text | The order, e.g. `SO-10447` |
+| `orderFound` | output | Boolean | True only if the order exists **and** belongs to this customer (default false) |
+| `deliveryStatus` | output | Text | Received, In Preparation, Shipped, Delivered or Delayed |
+| `expectedDeliveryDate` | output | Date | Expected delivery date |
+| `carrier`, `trackingNumber` | output | Text | Only for shipped or delivered orders |
+| `delayReason` | output | Text | Only for delayed orders |
+| `message` | output | Text | The not-found message (empty when the order is found) |
+
+**Logic:** *Get Account* (by `Customer_Number__c`) → *Account Found?* → *Get Order* (by
+`Name` **and** `AccountId`) → *Order Found?* → *Set Order Output*, or one of the two
+*Set Not Found* assignments. Both not-found assignments use the same constant,
+`notFoundMessage`.
+
+**How the XML is organised.** The retrieved file groups elements by type, not by the order
+they run in:
+- `<variables>`: the inputs and outputs above (`isInput` / `isOutput`), each with a description.
+- `<constants>`: `notFoundMessage`, the one fixed message text.
+- `<recordLookups>`: the two *Get Records* elements, with their `<filters>`.
+- `<decisions>`: *Account Found?* and *Order Found?* (condition: the lookup result `IsNull = false`).
+- `<assignments>`: *Set Order Output* and the two *Set Not Found* elements.
+- `<start>` and each element's `<connector>`: the path through the flow.
+- `<locationX/Y>` and `processMetadataValues`: canvas layout only, not logic.
+
+### API test results
+
+| Test | Input | Result |
+|---|---|---|
+| a) Own order | `C-1004` + `SO-10447` | `orderFound: true`, `deliveryStatus: Delayed`, `expectedDeliveryDate: 2026-11-18`, `delayReason: Carrier capacity problem in the region.` (matches `data/generated/orders.json`) |
+| b) Other company's order | `C-1001` + `SO-10447` | `orderFound: false`, standard not-found message, no order details |
+| c) Unknown customer | `C-9999` + `SO-10447` | `orderFound: false`, **the same** message, no order details |
+| d) Empty customer number | `""` + `SO-10447` | `orderFound: false`, the same message, no order details |
+
+All 5 checks pass: the 4 tests plus "b and c return an identical message".
+
+### What I learned
+- **Why a Flow for an agent action:** Flow is declarative. An admin can read, change and
+  debug it in Flow Builder without writing code, which matters after the FDE has left.
+  Agentforce can use an autolaunched flow directly as an agent action, and the input/output
+  variables become the action's interface. I wrote a clear description on every variable,
+  because the agent relies on those to decide what to pass in and how to read the result.
+- **The account filter is a deterministic guardrail.** The rule "a customer only sees their
+  own orders" is enforced in the query (`AccountId = the customer's account`), not in the
+  prompt. Even if the model is tricked by a prompt injection, the action cannot return
+  another company's order, because that data never reaches the model.
+- **The same not-found message for every failure.** "Not your order", "unknown customer" and
+  "order does not exist" all return exactly the same text. If the messages differed, someone
+  could probe which customer numbers or order numbers exist (an information leak, also called
+  enumeration).
+- **Outputs are explicit.** Only the fields copied in *Set Order Output* leave the flow. Price,
+  account details and order lines are never returned, so the agent can't leak them either.
+- **Debug mode first, then activate.** Flow Builder's Debug shows each element's query, the
+  values it used, and the path taken. That makes it quick to check the guardrail visually
+  before anything goes live.
+- **Build in the UI, keep in Git.** Building a flow by hand is fine. Retrieving it to source
+  afterwards makes it versioned, reviewable and deployable to another org like any other code.
+- **Test through the real interface.** Testing through the invocable-action REST endpoint
+  checks exactly what the agent will receive, including how values are formatted: the Date
+  comes back as `2026-11-18T00:00:00.000+0000`.
+
+### Problems I hit and limitations
+| Issue | Detail | Solution / next step |
+|---|---|---|
+| Output name | I expected an output called `notFoundMessage`, but that is the *constant*. The output variable is `message`, which receives the constant's text | Tests check `message`. Constants are never outputs |
+| **Order Name is not unique** | `Order.Name` is a free-text field. Two orders with the same name in one account would make *Get Order* (first record only) return an arbitrary one. It is unique in my data only because the generator makes it so | For production: a unique external-ID order number field, or a duplicate rule on Order Name |
+| Empty customer number | A *Get Records* filter "equals {!customerNumber}" with an empty value matches records where the field is empty. It returns "not found" today only because **every** Account in this org has a customer number | Added test d) as a regression check. Hardening: return "not found" straight away when an input is blank |
+| Where the customer number comes from | The flow trusts its `customerNumber` input. If the agent took that number from the chat, a user could type another company's number | In production, take the account from the logged-in portal user (Contact → Account), never from user input |
+
+### Link to the FDE role
+Agent actions are where an FDE turns business rules into safe, testable building blocks. The
+key judgement is **what to enforce deterministically** (data access, in the action) and **what
+to leave to the model** (the conversation). Building in a tool the client's admins know (Flow),
+keeping it in Git, and proving the guardrail with automated API tests is the kind of evidence a
+client's security and architecture reviewers ask for.
+
+### Possible interview questions
+- *Why did you build this action as a Flow and not in Apex? When would you choose Apex instead?*
+- *How do you make sure an agent cannot show one customer another customer's data?*
+- *Why enforce the guardrail in the action instead of in the agent's instructions?*
+- *Why does the action return the same message for "not your order" and "unknown customer"?*
+- *Where should the customer's identity come from in production, and why not from the chat?*
+- *How do you test an agent action before connecting it to the agent?*
+- *The flow was built in the UI. How do you get it under version control and into another org?*
+- *What are the limitations of looking up an order by its name?*
+- *What would you check in a code review of an agent action?*
+
+---
+
 <!-- Next steps are added as the project continues. -->

@@ -20,5 +20,19 @@ evaluation set and monitoring.
 | `evals/` | Test set, evaluation script and quality/cost report |
 | `docs/` | Use-case brief, architecture diagram, demo script |
 
+## Screenshots
+
+**Get Order Status flow (agent action for order status).** It looks up the customer's
+account first, then the order *within that account only*, so a customer can never see another
+company's order.
+
+![Get Order Status flow in Flow Builder](docs/images/get-order-status-flow.png)
+
+**Guardrail test in Flow Builder's Debug mode.** Customer `C-1001` asks for order `SO-10447`,
+which belongs to another company. The order lookup finds nothing, and the flow returns the
+standard "not found" message.
+
+![Debug run of the guardrail case](docs/images/get-order-status-guardrail-debug.png)
+
 ## Tech
 Salesforce Developer Edition · Agentforce · Flows · Apex · Salesforce CLI · Python · Claude API · MCP
