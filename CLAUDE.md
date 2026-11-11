@@ -41,6 +41,17 @@ Agent use cases:
 Fallback: if Agentforce is too limited in the free org, the Claude agent on Salesforce data
 becomes the main demo.
 
+## Environment (as of Day 1, 11 Nov 2026)
+- Windows, VS Code, PowerShell. Salesforce CLI 2.157, Git 2.55, Python 3.12.
+- Salesforce Developer Edition org (with Agentforce), CLI alias **`delta-dev`** (default org).
+  Instance: `https://orgfarm-60adaaa1ee-dev-ed.develop.my.salesforce.com`
+- Available in Setup: Agentforce Studio, Agentforce Data Library, Agentforce Registry
+  (Registered APIs, **Registered MCP Servers**), Agentforce Gateway, Einstein Generative AI.
+- GitHub: https://github.com/mahdidadgar-data/b2b-service-agent-salesforce (branch `main`).
+
+## Progress log
+- **Day 1 (11 Nov):** setup done: Dev org, CLI auth, Salesforce DX project skeleton, first commit `908cf06`.
+
 ## Timeline
 | Day | Date | Goal |
 |---|---|---|
