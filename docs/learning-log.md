@@ -29,7 +29,7 @@ tools on my computer, and a Git repository that holds the Salesforce configurati
    - `CLAUDE.md`: project context for Claude Code (AI-assisted development)
 5. **Connected the folder to my org** with the CLI:
    ```powershell
-   sf org login web --alias delta-dev --set-default --instance-url https://orgfarm-60adaaa1ee-dev-ed.develop.my.salesforce.com
+   sf org login web --alias delta-dev --set-default --instance-url https://<your-org>.develop.my.salesforce.com
    ```
 6. **Made the first commit and pushed it to GitHub:**
    ```powershell

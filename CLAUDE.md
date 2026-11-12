@@ -44,7 +44,8 @@ becomes the main demo.
 ## Environment (as of Day 1, 11 Nov 2026)
 - Windows, VS Code, PowerShell. Salesforce CLI 2.157, Git 2.55, Python 3.12.
 - Salesforce Developer Edition org (with Agentforce), CLI alias **`delta-dev`** (default org).
-  Instance: `https://orgfarm-60adaaa1ee-dev-ed.develop.my.salesforce.com`
+  Instance: `https://<your-org>.develop.my.salesforce.com` (placeholder; the real instance URL is
+  available locally via `sf org display --target-org delta-dev` and is not stored in Git).
 - Available in Setup: Agentforce Studio, Agentforce Data Library, Agentforce Registry
   (Registered APIs, **Registered MCP Servers**), Agentforce Gateway, Einstein Generative AI.
 - GitHub: https://github.com/mahdidadgar-data/b2b-service-agent-salesforce (branch `main`).
