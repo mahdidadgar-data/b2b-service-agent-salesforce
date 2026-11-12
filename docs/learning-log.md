@@ -686,4 +686,235 @@ site when an agent "does something strange" in front of the client.
 
 ---
 
+## Step 6a (Day 2, 12 Nov 2026): Complaint → Case (flow)
+
+### Goal
+Build the action for UC4 (complaints and returns): register a customer's complaint as a Case
+for a human colleague, optionally linked to one of the customer's orders. Apply the same
+guardrails as Get Order Status, never create duplicate cases, and give the agent user exactly
+the access this needs, and no more.
+
+### What I did
+1. **Wrote the flow `Create_Complaint_Case` as metadata, not in Flow Builder.** After Step 4 I
+   knew how a flow's XML is organised, so I wrote the file by hand and deployed it with the CLI.
+   It still opens normally in Flow Builder (auto-layout).
+
+   | Input / output | Type | Meaning |
+   |---|---|---|
+   | `customerNumber` | input, required | The customer, e.g. `C-1004` |
+   | `orderNumber` | input, optional | The order the complaint is about, e.g. `SO-10447` |
+   | `complaintSummary` | input, required | Short description in the customer's words |
+   | `caseCreated` | output, Boolean (default false) | True only if this call created a new case |
+   | `caseNumber` | output | The new case, or the existing open case for this order |
+   | `message` | output | The text for the customer |
+
+   **The paths through the flow**, each ending in exactly one message:
+
+   | Situation | Result |
+   |---|---|
+   | Customer number or complaint blank | "I need your customer number and a short description of the problem to register a complaint." |
+   | Unknown customer, **no** order number | "I couldn't find a customer with this customer number. Please check it." |
+   | Unknown customer **with** an order number, or an order that is not in this account | The message **identical** to Get Order Status: "No order found for this customer number and order number. Please check both numbers." |
+   | Open agent case already exists for this order | No new case: "There is already an open complaint for this order: 00001032. A colleague will contact you." |
+   | All checks pass | New Case (Account, order link, Subject "Complaint via service agent - SO-…", Description, Origin Web, Status New, Priority Medium, `Created_By_Agent__c` Agentforce), then "Your complaint has been registered as case 00001032. A colleague will contact you." |
+   | Create Case or reading it back fails (fault path) | "Something went wrong while registering your complaint. Please try again later, or I can connect you with a colleague." |
+
+2. **Checked every picklist value before using it** (`sf sobject describe --sobject Case`):
+   `Origin = Web`, `Status = New`, `Priority = Medium`, `Created_By_Agent__c = Agentforce`.
+3. **Duplicate protection.** If the complaint is about an order, the flow first looks for an
+   open case (`IsClosed = false`) with the same order and `Created_By_Agent__c = Agentforce`.
+   If it finds one, it returns that case number instead of creating a second case. A customer
+   who repeats a complaint, or an agent that calls the action twice, does not flood the service
+   team.
+4. **The case number is read back after the insert.** Salesforce assigns `CaseNumber` on
+   insert, so the flow reads the new case by its Id to get it.
+5. **Split the permission set by role** (see below), and assigned the new `Delta_Agent_Access`
+   to the agent user in place of `Delta_Data_Access`.
+6. **Reviewed version 1 and deployed version 2** with two review decisions: a clear message
+   for an unknown customer without an order number, and fault connectors on Create Case and
+   on the read-back. Version 2 is active; version 1 is kept as *Obsolete* for rollback.
+7. **Extended the API tests** (`tests/run_flow_tests.py`) into two suites, and added
+   `scripts/setup-agent-permissions.ps1` for the assignment step (see *Org setup* in the README).
+
+### The permission set split: access per role
+`Delta_Data_Access` was assigned to two very different users: me (the admin) and the agent
+user. The plan was to make the Account, Order and Product2 fields read-only in it, because the
+agent only reads them. A query showed that this permission set is **my admin user's only source
+of edit rights** on those 14 fields, so the change would have broken my own data loading and
+fixes.
+
+The fix is one permission set per role:
+
+| Permission set | Assigned to | Access |
+|---|---|---|
+| `Delta_Data_Access` (unchanged) | Human users, me as admin | Read and edit on the project's custom fields |
+| `Delta_Agent_Access` (new) | The agent user only | Read Account and Order; read and create Case; Account, Order and Product2 fields read-only; three Case fields read and edit |
+
+A role-based design means each permission set can be least-privilege for exactly one kind of
+user, and a change for the agent can never take rights away from a human (or the reverse).
+Product2 object access (Step 6b) and Opportunity access (Step 6c) are added only when an action
+needs them. Assignments are data, not metadata, so they are not in `force-app/`:
+`scripts/setup-agent-permissions.ps1` makes them repeatable in another org.
+
+### The Case field access check
+The flow runs as the agent user, so I checked field-level security (FLS) for that user on
+every Case field the flow writes or reads. I queried `FieldPermissions` across all of the agent
+user's permission sets (profile included), and `EntityParticle.IsPermissionable` to see which
+fields FLS applies to at all.
+
+| Field | Used for | Agent user without Delta_Data_Access | Action |
+|---|---|---|---|
+| Subject, Description, Origin, Priority | write | Read + edit from the Einstein Agent User profile | none |
+| Status | write | Not permissionable: always editable | none (cannot be granted) |
+| CaseNumber, IsClosed | read | Not permissionable: always readable | none |
+| **AccountId** | write | **Read only** (profile) | added read + edit |
+| **Related_Order__c**, **Created_By_Agent__c** | write and read | Only through Delta_Data_Access, which was being removed | added read + edit |
+
+Case **object** access (read, create) already came from the platform permission set
+`AgentforceServiceAgentSecureBase`. I granted it in `Delta_Agent_Access` as well, so our own
+permission set states everything the agent relies on.
+
+### API test results
+`python tests/run_flow_tests.py --org delta-dev`: **12 passed, 0 failed.**
+
+| Suite | Test | Result |
+|---|---|---|
+| Get_Order_Status | a–d and the identical-message check (unchanged) | ✅ 5 of 5 |
+| Create_Complaint_Case | a) `C-1004` + `SO-10447`: own order | ✅ Case created (1 new case in the org); Account, order link, Subject, Description, Origin, Status, Priority and `Created_By_Agent__c` checked in the org |
+| | b) the same call again | ✅ `caseCreated: false`, the **same** case number, duplicate message, 0 new cases |
+| | c) `C-1001` + `SO-10447`: other company's order | ✅ Message identical to Get Order Status, no case number, 0 new cases |
+| | d) `C-1004`, no order number | ✅ Case created on the account, not linked to an order, Subject without an order number |
+| | e) complaint is whitespace only | ✅ Missing-input message, 0 new cases |
+| | f) `C-9999`, no order number | ✅ Customer-not-found message, 0 new cases |
+| | Cleanup | ✅ Deleted the 2 cases this run created, by Id, and confirmed they are gone |
+
+How the complaint suite proves its results:
+- **It counts the agent's cases in the org before and after every call**, so "no case created"
+  is measured, not assumed from the output.
+- **It deletes only the cases it created**, in a `finally` block, so a failed test still cleans up.
+- **It stops instead of deleting** if an open agent case on SO-10447 already exists before the
+  run: that case is not ours.
+
+### What I learned
+- **Writing a flow as XML is possible, but Flow Builder adds structure you forget.** The
+  builder always creates an End element; by hand I had to add it myself.
+- **A failed deploy rolls back everything.** One broken flow also stopped the permission set
+  in the same deploy. That is good: the org never ends up half-changed.
+- **Permission sets per role, not per project.** A permission set shared by humans and the
+  agent forces a choice between least privilege for the agent and working rights for people.
+- **Check FLS for the runtime user on every field the action writes.** Admin tests can't find
+  missing permissions. Some standard fields (Status, CaseNumber, IsClosed) are not subject to
+  FLS at all; `EntityParticle.IsPermissionable` tells you which.
+- **Write actions need idempotency.** The duplicate check makes the action safe to call twice,
+  which matters because a model may retry.
+- **A fault path turns a crash into an answer.** Without it, the agent gets a flow error and
+  improvises. With it, the agent gets a clear message and can offer a human.
+- **Messages are a security decision.** With an order number, the flow never reveals which
+  number was wrong. Without one, it says the customer number was not found: more helpful, but it
+  does confirm whether a customer number exists. That was a conscious trade-off, see the open
+  items.
+- **Tests that write data must clean up after themselves**, and only after themselves.
+- **When a query result is alarming, verify it before acting on it.** See problem 4.
+
+### Problems I hit and how I solved them
+
+**1. The first deploy failed: missing `<ends>`.**
+- *Symptom:* `Invalid element reference END_ELEMENT_1 not found for target`, and "Components: 1/2".
+- *Root cause:* every path pointed to `END_ELEMENT_1`, but I had not written the `<ends>`
+  element. Flow Builder always adds it; hand-written XML has to include it.
+- *Effect:* the deploy is all or nothing, so the permission set in the same deploy was rolled
+  back too.
+- *Fix:* added the `<ends>` element and deployed again; both components succeeded.
+- *Lesson:* when writing metadata by hand, compare it with a file the tool generated.
+
+**2. A shared permission set would have broken my own admin rights.**
+- *Symptom:* none yet. I found it before deploying, by checking who else uses the permission set.
+- *How I found it:* a query on `FieldPermissions` across all of my admin user's permission sets
+  showed that `Delta_Data_Access` is the only source of edit rights on 14 Account, Order and
+  Product2 fields.
+- *Root cause:* one permission set served two roles (human admin and agent).
+- *Fix:* split into `Delta_Data_Access` (humans, unchanged) and `Delta_Agent_Access` (agent only).
+- *Lesson:* before you remove a permission, check who else depends on it.
+
+**3. `Case.AccountId` is read-only for the agent user.**
+- *Symptom:* none in the tests. They run as admin and would have passed.
+- *How I found it:* the FLS query for the agent user showed `Case.AccountId` read = true,
+  edit = false on the Einstein Agent User profile.
+- *Root cause:* the agent profile allows reading the account on a case, not setting it. The
+  flow sets it on every case.
+- *Fix:* granted read and edit on `Case.AccountId` in `Delta_Agent_Access`.
+- *Lesson:* this is the Step 5 `INVALID_TYPE` lesson again, but found *before* it failed in the
+  agent: check the runtime user's access by query instead of waiting for a runtime error.
+
+**4. A query suggested permission sets had disappeared.**
+- *Symptom:* a verification query returned 5 assignments for the agent user (earlier 6) and 2
+  for my admin user (earlier 7). It looked as if `AgentforceServiceAgentSecureBase` and five of
+  my admin's permission sets had been removed.
+- *How I checked it:*
+  - Re-ran the original query exactly as before. It still returned 6 and 7.
+  - The only difference was `ORDER BY PermissionSet.Name`. With it, the platform permission
+    sets drop out of the result.
+  - **Setup Audit Trail** confirmed that the only unassignment that day was `Delta_Data_Access`
+    from the agent user, the one I made on purpose.
+- *Root cause:* the query, not the org.
+- *Fix:* no change to the org. Assignment queries (including the setup script) don't sort by
+  `PermissionSet.Name`.
+- *Lesson:* when a result is alarming, confirm it with an independent source (here the audit
+  trail) before "fixing" anything. Acting on the wrong reading would have meant re-assigning
+  permission sets that were never gone.
+
+| Problem | Cause | Solution |
+|---|---|---|
+| Deploy failed: `END_ELEMENT_1 not found` | Hand-written flow XML had no `<ends>` | Added `<ends>`; noted that a failed deploy rolls back everything |
+| Read-only change would break admin edit rights | One permission set for two roles | Split into `Delta_Data_Access` (humans) and `Delta_Agent_Access` (agent) |
+| `Case.AccountId` read-only for the agent | Einstein Agent User profile | Read + edit in `Delta_Agent_Access` |
+| Too few assignments in a query | `ORDER BY PermissionSet.Name` drops rows | Verified with the original query and the Setup Audit Trail; no org change |
+
+### Open items
+| Item | Detail |
+|---|---|
+| **Preview test as the agent user** | The API tests run as admin. They prove the logic, not the agent's access. Next: add the action to the agent (a complaints subagent) and test a complaint in Agentforce Preview |
+| Fault path not tested | An admin API call can't make the insert fail. The fault path is checked by review only. If the read-back fails after a successful insert, the flow reports a failure although the case exists (rare, but possible) |
+| Customer numbers can be probed | Without an order number, the message confirms whether a customer number exists (a review decision for clarity). Production fix: identity from the logged-in portal user, as in Step 5 |
+| Account-only complaints have no duplicate check | Duplicate protection works per order. Two complaints without an order number create two cases |
+| Assignments outside Git | Handled by `scripts/setup-agent-permissions.ps1`; not yet run in a second org |
+| Product2 field access is inactive | The Product2 field permissions in `Delta_Agent_Access` take effect when Product2 object read is added in Step 6b |
+
+### Link to the FDE role
+Write actions are where an agent can do real damage: duplicate cases, cases on the wrong
+account, or a permission change that breaks the client's own staff. This step shows the FDE
+habits that prevent that:
+- check the platform (picklists, FLS, who uses a permission set) before building;
+- design per role;
+- make the action idempotent and give it a fault path;
+- prove every behaviour with tests that measure the org and clean up after themselves;
+- when something looks wrong, verify with an independent source before changing a client's org.
+
+### Possible interview questions
+- *How do you stop an agent from creating duplicate records?*
+  Idempotency in the action: before creating a complaint case for an order, the flow looks for
+  an open agent case on that order and returns its number instead. Test b) calls the action
+  twice and proves that only one case exists.
+- *Why did you split the permission set?*
+  It served both humans and the agent. Making it read-only for the agent would have removed my
+  admin's only edit rights on 14 fields. One permission set per role keeps each one least-privilege
+  without side effects on the other.
+- *Your tests pass as admin. How do you know the agent user can create the case?*
+  I queried the agent user's field-level security on every field the flow writes, across all its
+  permission sets. That found `Case.AccountId` read-only on its profile, which I fixed before it
+  failed. The final proof is a test in Agentforce Preview, which runs as the agent user.
+- *Why does the flow return the same message for "unknown customer" and "not your order"?*
+  So nobody can use the agent to find out which order numbers belong to which customers. The one
+  exception, an unknown customer without an order number, was a conscious trade-off for clarity;
+  in production, identity comes from the login.
+- *What happens if creating the case fails?*
+  A fault connector returns `caseCreated = false` and a message that offers a colleague, so the
+  agent can respond properly instead of improvising after a flow error.
+- *A query shows that permissions are missing from a user. What do you do?*
+  Verify it before acting: re-run the query in its original form, and check the Setup Audit
+  Trail. In my case, an `ORDER BY` on a relationship field returned fewer rows; nothing had
+  changed in the org.
+
+---
+
 <!-- Next steps are added as the project continues. -->

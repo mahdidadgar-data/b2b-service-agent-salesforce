@@ -17,9 +17,22 @@ evaluation set and monitoring.
 | `force-app/` | Salesforce metadata (objects, Flows, Apex, agent), deployed with the Salesforce CLI |
 | `data/` | Python scripts that generate synthetic B2B data |
 | `tests/` | API tests for the agent actions (Flows), run through the Salesforce CLI |
+| `scripts/` | Org setup scripts (PowerShell) for steps that are data, not metadata |
 | `claude_agent/` | Claude agent connected to Salesforce through MCP / REST API |
 | `evals/` | Test set, evaluation script and quality/cost report |
 | `docs/` | Use-case brief, architecture diagram, demo script |
+
+## Org setup
+Metadata (objects, fields, Flows, permission sets, the agent) is deployed from `force-app/`.
+Permission set **assignments** are data, so they need one extra step per org:
+
+- Human/admin users get `Delta_Data_Access` (read and edit on the project's custom fields):
+  `sf org assign permset --name Delta_Data_Access --target-org <alias>`
+- The agent user gets the least-privilege `Delta_Agent_Access` instead, and must **not** keep
+  `Delta_Data_Access`. The script does both and prints the result:
+  ```powershell
+  .\scripts\setup-agent-permissions.ps1 -AgentUsername "<agent-username>" -TargetOrg <alias>
+  ```
 
 ## Screenshots
 

@@ -69,6 +69,12 @@ becomes the main demo.
   `AiAgentDefinition`/`AiAgentDefinitionVersion` (generated at Commit Version; generated `.agent` files are base64).
   6 Preview tests pass. Open for Step 8: static English welcome, Ambiguous Question has no exits,
   real escalation needs Omni-Channel, identity still from the typed customer number.
+- **Step 6a (12 Nov):** flow `Create_Complaint_Case` written as metadata (v2 active: unknown-customer message
+  without order number, fault path on create/read-back), duplicate protection per order. Permission sets split
+  per role: `Delta_Data_Access` = humans/admin (unchanged), `Delta_Agent_Access` = agent user only (read Account/
+  Order, read+create Case, Case.AccountId/Related_Order__c/Created_By_Agent__c editable). Assignment script
+  `scripts/setup-agent-permissions.ps1`. Tests: 12/12 pass, complaint suite cleans up its own cases.
+  Do not use `ORDER BY PermissionSet.Name` on PermissionSetAssignment (drops rows). Open: Preview test as agent user.
 
 ## Timeline
 | Day | Date | Goal |
