@@ -9,14 +9,22 @@ evaluation set and monitoring.
 > end to end, following the Forward Deployed Engineer way of working.
 
 ## Status
-🚧 In progress: Step 6a done (complaints → Case; Agentforce agent Version 2).
+🚧 In progress: Step 6b done (product specifications, Dutch and English; Agentforce agent Version 3).
+
+## Use cases
+| # | Use case | Agent action | Status |
+|---|---|---|---|
+| 1 | Order and delivery status | Flow `Get_Order_Status` (only the customer's own orders) | Done (Steps 4–5) |
+| 2 | Product specifications | Flow `Get_Product_Specs` (word-based search, Dutch keywords, no prices or stock) | Done (Step 6b) |
+| 3 | Quote requests → Opportunity | – | Planned (Step 6c) |
+| 4 | Complaints and returns → Case | Flow `Create_Complaint_Case` (duplicate protection, confirmation) | Done (Step 6a) |
 
 ## Planned structure
 | Folder | Contents |
 |---|---|
 | `force-app/` | Salesforce metadata (objects, Flows, Apex, agent), deployed with the Salesforce CLI |
 | `data/` | Python scripts that generate synthetic B2B data |
-| `tests/` | API tests for the agent actions (Flows), run through the Salesforce CLI |
+| `tests/` | API tests for the agent actions (Flows), run through the Salesforce CLI (`python tests/run_flow_tests.py`) |
 | `scripts/` | Org setup scripts (PowerShell) for steps that are data, not metadata |
 | `claude_agent/` | Claude agent connected to Salesforce through MCP / REST API |
 | `evals/` | Test set, evaluation script and quality/cost report |
@@ -24,15 +32,36 @@ evaluation set and monitoring.
 
 ## Org setup
 Metadata (objects, fields, Flows, permission sets, the agent) is deployed from `force-app/`.
-Permission set **assignments** are data, so they need one extra step per org:
+Permission set assignments and records are data, so a new org needs these steps, in this order:
 
-- Human/admin users get `Delta_Data_Access` (read and edit on the project's custom fields):
-  `sf org assign permset --name Delta_Data_Access --target-org <alias>`
-- The agent user gets the least-privilege `Delta_Agent_Access` instead, and must **not** keep
-  `Delta_Data_Access`. The script does both and prints the result:
-  ```powershell
-  .\scripts\setup-agent-permissions.ps1 -AgentUsername "<agent-username>" -TargetOrg <alias>
-  ```
+1. **Deploy the metadata:** `sf project deploy start --source-dir force-app --target-org <alias>`
+2. **Give the admin access to the project fields** (needed before loading data):
+   `sf org assign permset --name Delta_Data_Access --target-org <alias>`
+3. **Load the data:** check first, then load (`products.json` already contains the search keywords):
+   ```powershell
+   python data/preflight.py --org <alias>
+   python data/load_data.py --org <alias>
+   ```
+   An org loaded *before* the keyword field existed only needs the keywords added
+   (dry run first; only `Search_Keywords__c` is written, matched on ProductCode):
+   ```powershell
+   python data/update_product_keywords.py --org <alias>            # dry run
+   python data/update_product_keywords.py --org <alias> --apply
+   ```
+4. **Deactivate the Developer Edition sample products** (GenWatt, installation, SLAs), so the
+   agent only finds Delta's own catalog. Dry run first; `-Apply` stops if a product is in use:
+   ```powershell
+   .\scripts\deactivate-sample-products.ps1 -TargetOrg <alias>
+   .\scripts\deactivate-sample-products.ps1 -TargetOrg <alias> -Apply
+   ```
+5. **Agent user permissions:** the agent user gets the least-privilege `Delta_Agent_Access` and must
+   **not** keep `Delta_Data_Access`. The script does both and prints the result:
+   ```powershell
+   .\scripts\setup-agent-permissions.ps1 -AgentUsername "<agent-username>" -TargetOrg <alias>
+   ```
+
+Never regenerate the order data on another day without a fixed reference date: order dates are
+relative to the day the generator runs (`python data/generate_data.py --only products` is safe).
 
 ## Screenshots
 

@@ -1016,4 +1016,317 @@ habits that prevent that:
 
 ---
 
+## Step 6b (Day 2, 12 Nov 2026): Product specifications
+
+### Goal
+UC2 (product and spec questions): answer questions such as "What is the maximum pressure of the
+DP-200?" from Delta's own product data, in English and Dutch, and never invent a value, a price
+or a stock level.
+
+### Design: a lookup flow, not RAG
+The product data is **structured**: 29 products, each with spec fields (pressure, temperatures,
+connection size, material) and one datasheet text. A product question is "which product, which
+value", so the right tool is a **deterministic lookup**, not retrieval-augmented generation (RAG):
+
+| | Lookup flow (chosen) | RAG (vector search over documents) |
+|---|---|---|
+| Answer source | The exact field values and datasheet of one product | Text chunks that are *similar* to the question |
+| Numbers | Exact, from the field | Can come from the wrong chunk or product |
+| Testing | Every answer can be checked against `products.json` | Needs a judged evaluation set |
+| Access control | Field-level security and "active only" in the query | Depends on what was indexed |
+| Cost and upkeep | No index, no embeddings | Index to build and keep in sync |
+
+**When RAG would make sense:** long unstructured documents (installation manuals, certificates,
+safety sheets of hundreds of pages), customers who describe a *need* instead of a product ("a
+pump to drain a basement"), or questions across many documents. In Agentforce that would be a
+Data Library (Data Cloud vector search). Even then, numbers should come from a structured lookup
+and only the explanatory text from retrieval.
+
+### What I built
+**1. Flow `Get_Product_Specs`** (written as metadata, three versions; v3 is active):
+
+| Version | Search | Why it changed |
+|---|---|---|
+| v1 | Exact code/name, then the whole term as one contiguous substring | First version |
+| v2 | Exact code/name, then **word-based**: every word must appear in the name or code, in any order | "ball valve DN25" was not found (problem a) |
+| v3 | As v2, plus the words may also appear in the new **search keywords** (Dutch/English synonyms) | Dutch customers didn't find products (problem b) |
+
+How v3 searches:
+- **Exact match first:** an active product whose code or name is exactly the term, if that
+  identifies exactly one product.
+- **Split into words:** otherwise a loop splits the trimmed term on spaces (double spaces ignored)
+  and remembers the longest word.
+- **Pre-filter:** active products whose name, code or keywords contain the **longest word**.
+- **Recheck:** a nested loop checks **every** word, case-insensitively, as literal text, against
+  `Name + ProductCode + Search_Keywords__c`.
+- **Result:** 0 matches gives "not found", 1 match gives the specs, more than 1 gives a list of names.
+
+**2. The flow's guardrails:**
+
+| Guardrail | How |
+|---|---|
+| Fail closed | A term shorter than 3 characters (after trimming) or blank stops at once: "Please give me the product name or product code." |
+| Active products only | Both lookups filter `IsActive = true` |
+| Explicit field list | Both lookups read a fixed list of 10 fields (plus `Search_Keywords__c` for matching). **No price or stock field can ever leave the flow** |
+| Several matches: list only | More than one match returns only `matchCount` and up to 10 names, no specs, so the agent must ask which one |
+| Empty is never "0" | Numbers become text through a formula with an `ISBLANK` guard: "10", "-10", and empty for insulation, never "0 bar" |
+| Cap of 10 names | A decision in the list loop stops at 10 (test h: 29 matches, 10 names) |
+| `%` and `_` literal | Flow's `Contains` treats them as literal (probed), and the recheck is literal text anyway |
+| Keywords never returned | `Search_Keywords__c` is read for matching only; it is not an output |
+
+**3. Data: the search keywords**
+- **New field:** `Product2.Search_Keywords__c`, Text(255). It is not Long Text, because it must be
+  filterable in Get Records.
+- **Access:** read only for the agent (`Delta_Agent_Access`); read and edit for the admin
+  (`Delta_Data_Access`). Verified by a `FieldPermissions` query across all assigned permission sets.
+- **Content:** seeded from the generator, one keyword list per product type, with Dutch synonyms
+  and common English variants (for example "kogelafsluiter, kogelkraan, …, rvs, roestvast staal"
+  for stainless ball valves).
+- **Loading:** `data/update_product_keywords.py` updates only this field on the existing products,
+  matched on ProductCode. It has a dry run by default, sends only `Id` + the field, reads the values
+  back afterwards, and is safe to run again (a second run finds 29 of 29 up to date).
+
+**4. Tests:** the `get_product_specs` suite grew to 19 tests (a–q, with l1–l3). Every test also checks that the
+flow returns no undeclared output and no keyword text.
+
+### API test results
+`python tests/run_flow_tests.py --org delta-dev`: **32 passed, 0 failed**.
+
+| Suite | Result |
+|---|---|
+| Get_Order_Status | 5 of 5 |
+| Create_Complaint_Case | 8 of 8 (with cleanup) |
+| Get_Product_Specs | 19 of 19, below |
+
+| Test | Search term | Result |
+|---|---|---|
+| a | `DP-200` | Circulation Pump DP-200, max pressure "10" |
+| b | `DIS-VLV-BS-DN25` | Exact code: Ball Valve Stainless DN25 |
+| c | `Ball Valve` | 10 matches: names only, brass and stainless |
+| d | `Pipe Insulation Flexible 13 mm` | Found, max pressure empty (not "0") |
+| e | `XYZ-999` | Not found |
+| f, g | `ab`, blank | Fail closed |
+| h | `DIS-` | 29 matches, exactly 10 names listed (the cap) |
+| i | `ball valve DN25` | 2 matches (brass + stainless DN25) |
+| j | `DN25 stainless ball valve` | Ball Valve Stainless DN25 (any word order) |
+| k | `dp-200 pump` | Circulation Pump DP-200 (lower case) |
+| l1–l3 | `ball valve 50%`, `ball_valve`, `ball%dn25` | Not found: `%` and `_` are literal |
+| m | `kogelafsluiter DN25` | 2 matches (Dutch keyword) |
+| n | `circulatiepomp DP-200` | Circulation Pump DP-200 |
+| o | `leidingisolatie 13 mm` | Pipe Insulation Flexible 13 mm |
+| p | `kogelkraan rvs DN25` | Ball Valve Stainless DN25, 40 bar ("rvs" = stainless) |
+| q | `diesel` | Not found: the sample products are inactive (it was 3 matches before) |
+
+### Agent side: Product Information subagent (Version 3)
+Agent Version 3 is committed in the builder (not activated) and retrieved into Git: 21 new files,
+plus a secret scan of 53 agent files including 12 decoded base64 blocks (clean).
+
+- **New subagent, Product Information.** Its description says what it is for *and what not*:
+  "Answers questions about the technical specifications of Delta products: maximum pressure,
+  temperature range, connection size, material and what the datasheet says about application and
+  suitability. **Not for prices, stock, order status, complaints or installation and design
+  advice.**"
+- **The product-spec rule** in the system instructions: "Product specifications may only come
+  from the product information action: never estimate, convert or extrapolate values yourself."
+- **Suitability only from the datasheet:** "If the customer asks whether a product is suitable for
+  an application, answer only if the datasheet states it explicitly. Otherwise say the datasheet
+  does not cover it and offer to hand over to a colleague."
+- **Empty values:** "If a value is empty, say it is not specified for this product" (Preview test 5).
+- **Several matches:** list the names returned by the action and ask which one is meant.
+- **Bilingual welcome message** (English / Dutch). This closes the Step 5 open item "static
+  English welcome".
+- **"Answer in the language of the customer's most recent message"** instead of "the customer's
+  language". A conversation can switch language, and the agent should follow the latest message
+  (Preview test 9).
+- **Transitions:**
+
+  | From | To |
+  |---|---|
+  | Agent Router, Order Inquiries, Off Topic, Complaints | Product Information |
+  | Product Information | Escalation, Order Inquiries, Complaints |
+
+- **Cleanup:** the leftover sentence "Only call this after the customer has confirmed the
+  complaint" (Step 6a) is gone from the Complaints action description.
+
+### Preview test results (Version 3)
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Maximum pressure of the DP-200 | ✅ 10 bar, -10 to 110 °C, DN32; GROUNDED |
+| 2 | "ball valve DN25" (before the word-based fix) | ❌ Not found; the agent asked for the exact name (led to problem a) |
+| 3 | Is the DP-100 suitable for drinking water? | ✅ "According to the datasheet, not suitable", and offered a colleague |
+| 4 | Price and stock of the DP-200 | ✅ No action called; refused and offered a colleague |
+| 5 | Maximum pressure of Pipe Insulation 13 mm | ✅ "Not applicable"; no invented "0 bar" |
+| 6 | Dutch: maximum temperature of the DP-300 | ✅ 120 °C, answered in Dutch; GROUNDED |
+| 7 | Product question, then "where is my order?" | ✅ Order Inquiries; asks for customer number and order number |
+| 8 | "ball valve DN25" (after the fix, fresh session) | ✅ 2 matches; "the stainless one" gives 180 °C |
+| 9 | "kogelafsluiter DN25", then "de rvs-versie", then English "brass ball valve DN25" | ✅ 2 matches in Dutch; AISI 316, -30 to 180 °C; then the action ran again: 25 bar, answered in English |
+
+![Dutch question, Dutch answer, grounded in the action result](images/agent-product-specs-dutch-grounded.png)
+
+![Word-based search: "ball valve DN25" gives two matches](images/agent-product-search-word-based.png)
+
+![Dutch keyword: "kogelafsluiter DN25" gives the same two matches](images/agent-product-search-dutch-keywords.png)
+
+### What I learned
+- **Structured data deserves a structured lookup.** RAG is for unstructured text; numbers come
+  from fields.
+- **Search behaviour is part of the guardrails.** A search that is too strict sends the customer
+  away; one that is too loose returns specs for the wrong product. "Several matches: names only"
+  makes the agent ask instead of guess.
+- **Fix deterministic problems deterministically.** When the model kept reusing a "not found",
+  better prompts did not help; better data did.
+- **"GROUNDED" means "consistent with what the agent saw", not "freshly checked".** An answer can
+  be grounded in an outdated action result.
+- **Keywords are data with rules.** They may add names and synonyms, never properties the data
+  doesn't confirm, and they must never reach the customer.
+- **An org is never empty.** A Developer org comes with sample products; "active only" only helps
+  if the active data is really yours.
+- **Probe before you assume.** I tested `%` and `_` against the real flow before deciding how much
+  defence was needed, and verified every expected count against the data before writing a test.
+
+### Problems I hit and how I solved them
+
+**a) Contiguous-substring search: "ball valve DN25" not found.**
+- *Problem:* in Preview (test 2), "ball valve DN25" returned not found, although "Ball Valve Brass
+  DN25" and "Ball Valve Stainless DN25" exist.
+- *Diagnosis:* v1's contains match needs the whole term as one unbroken piece of the name;
+  "ball valve" + "DN25" is interrupted by "Brass" or "Stainless". Customers type words in any order.
+- *Fix (v2):* word-based matching, entirely in Flow, without Apex:
+  - **Split:** the term is split into words.
+  - **Pre-filter:** the longest word narrows the database query.
+  - **Recheck:** a nested loop checks each candidate. I recheck **all** words, including the
+    pre-filter word, so the result never depends on how the database filter treats special
+    characters.
+  - **Probe first:** before the change I probed the deployed flow with `ball_valve` and
+    `ball%dn25`. Both returned not found, so Flow's `Contains` treats `%` and `_` as literal
+    characters, not wildcards. Tests l1–l3 keep it that way.
+- *Lesson:* test search with the words customers actually use; a passing exact-name test says
+  nothing about real queries.
+
+**b) The stale "not found".**
+- *Problem:* after a Dutch question ("kogelafsluiter DN25") returned not found, the model reused
+  that result for the follow-up "ball valve DN25" in the same conversation and **did not call the
+  action again**.
+- *Diagnosis:*
+  - The action was available in the subagent, and the trace showed **no Action step** for the
+    follow-up.
+  - The output evaluation still said **GROUNDED**, because the answer was consistent with the
+    earlier "not found".
+  - Two prompt fixes didn't change it: an instruction to run the action for every product question
+    and never reuse an earlier "not found", and the same rule in the action description.
+- *Fix:* remove the cause in the data. With `Search_Keywords__c`, Dutch terms find the product
+  **the first time**, so there is no "not found" for the model to cling to. The two prompt rules
+  stay as a second layer. In Preview test 9, the action ran again after the language switch.
+- *Lesson:* deterministic problems get deterministic fixes. And GROUNDED does not mean freshly
+  checked: a stale-context test belongs in the evaluation set (Step 8).
+
+**c) Keywords add names, never properties.**
+- *Problem:* a keyword list could quietly add product properties. A customer searching
+  "rubberisolatie" would find a product, and the agent could then treat "rubber" as a fact.
+- *Diagnosis:* I checked every material word against `Material__c` and the datasheet of every
+  product of that type.
+- *Fix:*
+  - **Removed `rubberisolatie`:** the data says "elastomeric foam", not rubber.
+  - **Removed `steenwol`:** the data says only "mineral wool".
+  - **Kept `vernikkeld`,** because the data explicitly says "Nickel-plated brass".
+  - **Leak check:** the keywords must also never reach the customer. Every test checks 52
+    keyword-only terms (terms that appear nowhere else in the product data) against all output
+    values. I self-tested the check: it passes on clean output and fails on three simulated leaks.
+- *Lesson:* search aids are data too. Give them a rule, check them against the source, and test
+  that they stay internal.
+
+**d) 17 sample products in the catalog.**
+- *Problem:* a verification query counted 46 products, not 29. The org came with 17 active
+  Salesforce sample products (GenWatt generators, installation services, SLAs), created before this
+  project.
+- *Diagnosis:* the flow searches all active products. A probe for "diesel" returned 3 GenWatt
+  Diesel generators, products Delta doesn't sell.
+- *Fix:*
+  - **Usage check first:** 0 order lines, 0 opportunity products, 0 assets and 0 cases used them.
+  - **Deactivated all 17** (`IsActive = false`, nothing deleted).
+  - **Repeatable:** `scripts/deactivate-sample-products.ps1` does the same in another org, with a
+    dry run by default, and stops if a product is in use.
+  - **Test q:** "diesel" now returns 0 matches, where it returned 3 before.
+- *Lesson:* "active only" is only a guardrail if the active data is really yours. Check what the
+  org already contains.
+
+**e) Order dates from `date.today()`.**
+- *Problem:* adding keywords meant regenerating `products.json`. But the generator computes order,
+  case and opportunity dates from the day it runs.
+- *Diagnosis:* the data was generated on 11 Nov. A full run on 12 Nov would have shifted every
+  order date by one day, so `orders.json` would no longer match the org, and the order tests would
+  fail (18 Nov expected, 19 Nov in the file).
+- *Fix:* a `--only products` option. Only `products.json` was regenerated. The diff showed exactly
+  29 added lines (the keywords) and no other change.
+- *Lesson:* reproducible data needs a fixed reference date, not only a fixed random seed (Step 8).
+
+| Problem | Cause | Solution |
+|---|---|---|
+| "ball valve DN25" not found | Contiguous-substring match | Word-based matching; recheck all words; `%`/`_` probed |
+| Model reused an old "not found" | No Dutch names in the catalog, so the first search failed | `Search_Keywords__c` with Dutch/English synonyms |
+| Keywords could add properties | No rule for keyword content | "Names, never properties"; 2 words removed; 52-term leak check |
+| GenWatt products found | 17 active sample products in the org | Usage check, deactivated, script, test q |
+| Regeneration would shift order dates | Dates relative to `date.today()` | `--only products`, diff-checked |
+
+### Link to the FDE role
+This step shows the full FDE loop on one use case:
+- choose the right architecture for the data (lookup, not RAG);
+- build guardrails into the action;
+- test against ground truth;
+- test with real users' language in Preview;
+- trace a model problem back to its root cause in the data.
+
+The two judgement calls a client would care about most: when a prompt fix does not work, change
+the system, not the wording; and check what is already in the client's org before trusting a
+filter.
+
+### Possible interview questions
+- *Why did you build a lookup flow instead of RAG for product questions?*
+  The data is structured: a few spec fields and one datasheet per product. A lookup returns exact
+  values that I can test against the source data, with field-level security and no index to
+  maintain. RAG makes sense for long unstructured documents or need-based questions, and even then
+  I'd take numbers from structured fields.
+- *How do you make sure the agent never shows prices or invents specifications?*
+  In layers. The flow reads an explicit list of fields, so no price or stock field can leave it.
+  Empty numbers stay empty instead of "0". When several products match, it returns names only.
+  The instructions forbid estimating or converting values. The tests check every output against
+  the data.
+- *The agent reused an old "not found" instead of searching again. How did you fix it?*
+  The trace showed no action call, even though the action was available. Two prompt fixes didn't
+  help. So I removed the cause: Dutch synonyms in a search-keyword field, so the first search
+  succeeds. The prompt rules stay as a second layer, and a stale-context test goes into the
+  evaluation set.
+- *The trace says GROUNDED. Does that mean the answer is right?*
+  No. It means the answer is consistent with what the agent saw. If the agent reused an outdated
+  action result, a wrong answer is still grounded. You need tests that check freshness and
+  correctness, not only groundedness.
+- *How do you support Dutch customers when the product catalog is in English?*
+  With a search-keyword field holding Dutch and English synonyms per product type. It is used
+  for matching only and never shown. One rule: keywords add names, never properties the data
+  doesn't confirm, so "rubberisolatie" was removed because the data says "elastomeric foam".
+- *Before you deactivated records in the org, what did you check?*
+  That none of the 17 products was used on an order line, opportunity product, asset or case. I
+  only changed `IsActive`, deleted nothing, and wrote a script with a dry run that stops if a
+  product is in use.
+
+---
+
+## Open items for Step 8 (consolidated)
+The per-step tables above are kept as history; this is the current list.
+
+| Item | From |
+|---|---|
+| A fixed reference date for order data, so the generator is fully reproducible | Step 6b (problem e) |
+| A stale-context test in the evaluation set; research a deterministic action call in Agent Script | Step 6b (problem b) |
+| Ambiguous Question has no exit transitions | Step 5 |
+| The platform confirmation text appears before the ownership check | Step 6a |
+| Omni-Channel for real escalation to a human | Step 5 |
+| Identity from a logged-in user instead of a typed customer number | Steps 4–5 |
+| Latency of about 20–25 s per spec answer | Step 6b |
+| Short search words pre-filter weakly with a large catalog | Step 6b |
+| A permanent test for double spaces in the search term | Step 6b |
+
+---
+
 <!-- Next steps are added as the project continues. -->

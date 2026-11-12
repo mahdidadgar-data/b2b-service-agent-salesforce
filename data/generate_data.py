@@ -7,9 +7,15 @@ loading means the data is reviewable, version-controlled and reproducible
 (fixed random seed), and the same files can later be used as ground truth
 for the evaluation set.
 
-Run:  python data/generate_data.py
+Run:  python data/generate_data.py                  (all files)
+      python data/generate_data.py --only products   (only products.json)
+
+Note: order, case and opportunity dates are relative to the day the script runs. Regenerating
+those files on another day shifts every date, so they no longer match the data already loaded
+in the org. Use --only to regenerate a file that has no dates (products) without touching the rest.
 """
 
+import argparse
 import json
 import random
 from datetime import date, timedelta
@@ -28,7 +34,10 @@ random.seed(SEED)
 def make_products():
     products = []
 
-    def add(code, name, category, price, pressure, tmin, tmax, size, material, application, notes):
+    def add(code, name, category, price, pressure, tmin, tmax, size, material, application, notes, keywords):
+        # keywords: extra search terms (Dutch synonyms + common English variants), lower case, comma
+        # separated. Used for search only, never shown to customers. Rule: keywords may add names and
+        # synonyms, never properties the data doesn't confirm (material words must match `material`).
         sheet = (
             f"{name} ({code})\n"
             f"Category: {category}\n"
@@ -52,6 +61,7 @@ def make_products():
             "Connection_Size__c": size,
             "Material__c": material,
             "Datasheet_Text__c": sheet,
+            "Search_Keywords__c": keywords,
             "Description": application,
             "IsActive": True,
             "_unit_price": price,
@@ -66,7 +76,8 @@ def make_products():
         add(f"DIS-PMP-{model}", f"Circulation Pump {model}", "Pumps", price, pressure, -10, tmax, size,
             "Cast iron housing, stainless steel impeller",
             "Circulation of heating and chilled water in commercial buildings.",
-            "Not suitable for drinking water or seawater. Variable-speed EC motor, 230 V.")
+            "Not suitable for drinking water or seawater. Variable-speed EC motor, 230 V.",
+            "circulatiepomp, cv-pomp, verwarmingspomp, pomp, circulator, heating pump")
     for model, pressure, size, price in [
         ("SP-40", 4.0, "DN40 / 1 1/2 inch", 349.00),
         ("SP-50", 6.0, "DN50 / 2 inch", 529.00),
@@ -74,7 +85,8 @@ def make_products():
         add(f"DIS-PMP-{model}", f"Submersible Drainage Pump {model}", "Pumps", price, pressure, 0, 40, size,
             "Stainless steel AISI 304",
             "Drainage of clean and lightly contaminated water from pits and basements.",
-            "Maximum solids size 10 mm. Not for flammable liquids.")
+            "Maximum solids size 10 mm. Not for flammable liquids.",
+            "dompelpomp, drainagepomp, kelderpomp, pomp, sump pump")
 
     # Valves
     for dn, inch, price_brass, price_ss in [
@@ -85,28 +97,34 @@ def make_products():
         add(f"DIS-VLV-BB-{dn}", f"Ball Valve Brass {dn}", "Valves", price_brass, 25.0, -20, 120,
             f"{dn} / {inch}", "Nickel-plated brass (CW617N)",
             "Shut-off for heating, cooling and compressed air installations.",
-            "Full bore. Not approved for gas installations.")
+            "Full bore. Not approved for gas installations.",
+            "kogelafsluiter, kogelkraan, afsluiter, kraan, messing, vernikkeld, shut-off valve, isolation valve")
         add(f"DIS-VLV-BS-{dn}", f"Ball Valve Stainless {dn}", "Valves", price_ss, 40.0, -30, 180,
             f"{dn} / {inch}", "Stainless steel AISI 316",
             "Shut-off for process water, chemicals (check compatibility) and steam up to 180 °C.",
-            "Full bore. Seals PTFE.")
+            "Full bore. Seals PTFE.",
+            "kogelafsluiter, kogelkraan, afsluiter, kraan, rvs, roestvast staal, roestvrij staal, inox, "
+            "shut-off valve, isolation valve")
     for dn, price in [("DN25", 44.50), ("DN50", 96.00)]:
         add(f"DIS-VLV-CK-{dn}", f"Check Valve {dn}", "Valves", price, 16.0, -10, 100,
             dn, "Brass body, stainless steel spring",
             "Prevents backflow in pumped water systems.",
-            "Install in the direction of the arrow on the body.")
+            "Install in the direction of the arrow on the body.",
+            "terugslagklep, terugslagventiel, keerklep, messing, non-return valve")
 
     # Fittings
     for size, price in [("15 mm", 1.85), ("22 mm", 2.60), ("28 mm", 3.95)]:
         add(f"DIS-FIT-PE-{size.split()[0]}", f"Press Fitting Elbow 90° {size}", "Fittings", price, 16.0, -20, 110,
             size, "Copper with EPDM O-ring",
             "Press connection for copper pipe in heating and drinking water.",
-            "Use the matching press profile (V-profile).")
+            "Use the matching press profile (V-profile).",
+            "persfitting, persbocht, bocht, knie, koper, 90 graden, press elbow")
     for dn, price in [("DN25", 6.20), ("DN50", 14.80)]:
         add(f"DIS-FIT-TS-{dn}", f"Threaded Tee Stainless {dn}", "Fittings", price, 25.0, -30, 200,
             dn, "Stainless steel AISI 316",
             "Branch connection in process and industrial piping.",
-            "BSP thread. Use suitable thread sealant.")
+            "BSP thread. Use suitable thread sealant.",
+            "t-stuk, draadfitting, schroefdraad, rvs, roestvast staal, roestvrij staal, inox, tee piece")
 
     # Insulation (no pressure rating)
     for thickness, price in [("13 mm", 4.10), ("19 mm", 5.75), ("25 mm", 7.90)]:
@@ -114,18 +132,21 @@ def make_products():
             # Connection_Size__c is Text(30): keep the size summary short
             None, -50, 105, f"{thickness} wall, pipe 15-54 mm", "Closed-cell elastomeric foam",
             "Thermal insulation and condensation control for heating and cooling pipes. Sold per 2 m length.",
-            "Fire class BL-s3,d0. Not for outdoor use without UV protection.")
+            "Fire class BL-s3,d0. Not for outdoor use without UV protection.",
+            "leidingisolatie, buisisolatie, isolatie, isolatieslang, flexibele isolatie, pipe lagging")
     add("DIS-INS-MW-50", "Mineral Wool Pipe Section 50 mm", "Insulation", 18.40,
         None, 0, 250, "50 mm wall, pipe up to 114 mm", "Mineral wool with aluminium foil",
         "High-temperature insulation for steam and hot process pipes. Sold per 1 m length.",
-        "Fire class A2L-s1,d0. Wear gloves and a dust mask when cutting.")
+        "Fire class A2L-s1,d0. Wear gloves and a dust mask when cutting.",
+        "leidingisolatie, buisisolatie, isolatie, isolatieschaal, minerale wol, pipe lagging")
 
     # Fixings
     for size, price in [("15-19 mm", 1.10), ("26-30 mm", 1.45), ("48-53 mm", 2.30)]:
         add(f"DIS-FIX-PC-{size.split('-')[0]}", f"Pipe Clamp with Rubber Lining {size}", "Fixings", price,
             None, -20, 100, size, "Galvanised steel, EPDM lining",
             "Fixing pipes to walls and ceilings with noise and vibration damping.",
-            "Includes M8/M10 combination nut.")
+            "Includes M8/M10 combination nut.",
+            "buisbeugel, pijpbeugel, leidingbeugel, beugel, buisklem, pipe clip, pipe bracket")
 
     return products
 
@@ -284,6 +305,13 @@ def make_opportunities(accounts):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--only", nargs="+",
+                        choices=["products", "accounts", "contacts", "orders", "cases", "opportunities"],
+                        help="Write only these files (everything is still generated, so the random "
+                             "sequence and the other data stay the same).")
+    args = parser.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     products = make_products()
     accounts, contacts = make_accounts_and_contacts()
@@ -296,10 +324,13 @@ def main():
         "cases": make_cases(orders),
         "opportunities": make_opportunities(accounts),
     }
+    if args.only:
+        data = {name: rows for name, rows in data.items() if name in args.only}
     for name, rows in data.items():
         (OUT_DIR / f"{name}.json").write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"{name:<14} {len(rows):>4} records")
-    print(f"Order items    {sum(len(o['_items']) for o in orders):>4} records")
+    if "orders" in data:
+        print(f"Order items    {sum(len(o['_items']) for o in orders):>4} records")
     print(f"Written to {OUT_DIR}")
 
 

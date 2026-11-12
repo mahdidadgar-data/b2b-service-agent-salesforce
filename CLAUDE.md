@@ -80,6 +80,13 @@ becomes the main demo.
   transitions Complaints↔Escalation/Order Inquiries, Off Topic→Complaints. 4 Preview tests pass; Preview cases
   had CreatedBy = agent user (proof of agent permissions), then deleted. API tests 13/13 (test g added).
   Open for Step 8: platform confirmation text promises a case before the ownership check.
+- **Step 6b (12 Nov):** flow `Get_Product_Specs` v3 (exact match first, then word-based: every word in Name/
+  ProductCode/`Search_Keywords__c`, longest word as pre-filter, literal recheck of all words; fail closed, active
+  only, explicit field list, no prices/stock, cap 10 names). New field `Product2.Search_Keywords__c` (Dutch/English
+  synonyms; agent read-only, admin read+edit) seeded via `data/update_product_keywords.py`. The 17 Developer
+  Edition sample products deactivated (`scripts/deactivate-sample-products.ps1`). Agent **Version 3** committed
+  in the builder (not activated) and retrieved: Product Information subagent, bilingual welcome, "language of the
+  most recent message". API tests 32/32; Preview tests 1–9 pass. Open items consolidated at the end of the log.
 
 ## Timeline
 | Day | Date | Goal |
@@ -99,6 +106,12 @@ becomes the main demo.
 - **Salesforce API access from Python goes through the CLI** (`data/sf_cli.py`). CLI 2.157 redacts the
   access token, so never try to extract, print or store a token.
 - **Validate before loading:** run `data/preflight.py` before `data/load_data.py` whenever the generator changes.
+- **Generator: `--only products`; never regenerate orders without a fixed date.** Order, case and opportunity
+  dates are relative to `date.today()`, so a full regeneration on another day shifts every date and breaks the
+  match with the org (and the order tests). `python data/generate_data.py --only products` is safe (no dates,
+  no randomness). A fixed reference date is on the Step 8 list.
+- **Product keywords** (`Product2.Search_Keywords__c`, matching only, never an output): keywords may add names
+  and synonyms, never properties the data doesn't confirm (check material words against `Material__c`).
 - **Learning log:** after each step, add a section to `docs/learning-log.md` (what was done, what was
   learned, problems and solutions, link to the FDE role, possible interview questions). At the end it
   becomes a printable PDF with a full interview-question section. Keep the steps in order (Step 1, 2, 3, ...).

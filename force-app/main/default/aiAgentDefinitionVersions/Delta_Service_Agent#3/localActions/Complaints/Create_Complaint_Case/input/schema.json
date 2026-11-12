@@ -1,0 +1,28 @@
+{
+  "required" : [ "complaintSummary", "customerNumber" ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "complaintSummary" : {
+      "title" : "complaintSummary",
+      "description" : "Required. Short description of the problem in the customer's own words.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "customerNumber" : {
+      "title" : "customerNumber",
+      "description" : "Required. The customer's customer number, for example C-1001.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "orderNumber" : {
+      "title" : "orderNumber",
+      "description" : "Optional. Order number in the format SO-12345, if the complaint is about one order.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

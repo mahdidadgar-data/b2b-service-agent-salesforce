@@ -1,5 +1,5 @@
 """
-API tests for the agent actions (Flows).
+API tests for the agent actions (Flows): order status, complaints and product specs.
 
 Calls each flow the same way an agent or integration does: through the REST invocable-action
 endpoint (/actions/custom/flow/<FlowName>). Every call goes through the Salesforce CLI
@@ -27,7 +27,31 @@ Suite 2: Create_Complaint_Case (UC4: complaint -> Case)
   how many cases the call really created. This suite writes data: afterwards it deletes the
   cases it created (only those, by Id), even if a test failed.
 
-Run:  python tests/run_flow_tests.py                      (default org, both suites)
+Suite 3: Get_Product_Specs (UC2: product and spec questions; read-only, no cleanup needed)
+  Request bodies:  tests/flows/get_product_specs/*.json
+  Ground truth:    data/generated/products.json
+    a) part of a code/name ("DP-200")       -> found, every spec field matches the data
+    b) exact product code                   -> found
+    c) "Ball Valve"                         -> several matches: names listed (max 10), no specs
+    d) exact name, product without pressure -> found, maxPressureBar empty (never "0")
+    e) unknown term                         -> not found
+    f) "ab" (too short), g) blank           -> fail closed
+    Word-based search: every word must appear in the name or code, in any order, case-insensitive.
+    h) "DIS-"                               -> 29 matches, exactly 10 names listed (the cap)
+    i) "ball valve DN25"                    -> 2 matches (brass and stainless DN25)
+    j) "DN25 stainless ball valve"          -> found (words in another order)
+    k) "dp-200 pump"                        -> found (lower case)
+    l1-l3) "ball valve 50%", "ball_valve", "ball%dn25" -> not found: % and _ are literal, never wildcards
+    Dutch terms via Product2.Search_Keywords__c (used for matching only):
+    m) "kogelafsluiter DN25"   -> 2 matches,  n) "circulatiepomp DP-200" -> found,
+    o) "leidingisolatie 13 mm" -> found,      p) "kogelkraan rvs DN25" -> Ball Valve Stainless DN25
+    q) "diesel"                -> not found: only Delta's catalog is active (the Developer Edition
+                                  sample products, e.g. GenWatt Diesel, are deactivated)
+  Every test also checks that no keyword text (Search_Keywords__c) appears in any output value.
+  Every test also checks that the flow returns no outputs beyond the declared spec fields
+  (no prices, stock or other data).
+
+Run:  python tests/run_flow_tests.py                      (default org, all suites)
       python tests/run_flow_tests.py --org delta-dev
       python tests/run_flow_tests.py --suite get_order_status
 Exit code 0 = all tests passed, 1 = at least one failure.
@@ -280,9 +304,200 @@ def run_create_complaint_case(org_args, sf):
     return len(CCC_TESTS) + 1, failures
 
 
+# =============================================================== Suite 3: Get_Product_Specs
+GPS_DIR = FLOWS_DIR / "get_product_specs"
+PRODUCTS = json.loads((ROOT / "data" / "generated" / "products.json").read_text(encoding="utf-8"))
+PRODUCTS_BY_CODE = {p["ProductCode"]: p for p in PRODUCTS}
+SPEC_FIELDS = ("productName", "productCode", "category", "maxPressureBar", "minTemperatureC", "maxTemperatureC",
+               "connectionSize", "material", "datasheetText")
+ALLOWED_OUTPUTS = set(SPEC_FIELDS) | {"productFound", "matchCount", "matchingProducts", "message"}
+PRODUCT_NOT_FOUND = "I couldn't find a product matching that name or code. Please check it."
+PRODUCT_MISSING_INPUT = "Please give me the product name or product code."
+SEVERAL_PRODUCTS = "Several products match. Please tell me which one you mean."
+
+
+def empty(value):
+    return value in (None, "")
+
+
+def number_text(value):
+    """How the flow should show a number field: '10' for 10.0, '-10' for -10, empty for no value."""
+    if value is None:
+        return None
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def only_allowed_outputs(out):
+    extra = sorted(k for k in out if not k.startswith("Flow__") and k not in ALLOWED_OUTPUTS)
+    return (f"no outputs beyond the spec fields (extra: {extra})", not extra)
+
+
+# Search_Keywords__c is used for matching only and must never leave the flow. only_allowed_outputs()
+# proves there is no keyword OUTPUT; this proves no keyword TEXT reaches any output value either.
+# Keyword-only terms are keyword terms that appear nowhere in the product data itself (name, code,
+# datasheet, ...), e.g. "kogelafsluiter" or "pipe lagging": they can only come from Search_Keywords__c.
+_PRODUCT_TEXT = " ".join(
+    f"{p['Name']} {p['ProductCode']} {p['Category__c']} {p['Material__c']} {p['Connection_Size__c']} "
+    f"{p['Datasheet_Text__c']} {p.get('Description') or ''}" for p in PRODUCTS).lower()
+KEYWORD_ONLY_TERMS = sorted({t.strip().lower() for p in PRODUCTS for t in (p.get("Search_Keywords__c") or "").split(",")
+                             if t.strip() and t.strip().lower() not in _PRODUCT_TEXT})
+
+
+def keywords_not_returned(out):
+    values = " ".join(str(v) for k, v in out.items() if not k.startswith("Flow__") and v is not None).lower()
+    leaked = [t for t in KEYWORD_ONLY_TERMS if t in values]
+    return (f"no Search_Keywords__c text in any output ({len(KEYWORD_ONLY_TERMS)} keyword-only terms checked; "
+            f"leaked: {leaked})", not leaked)
+
+
+def expect_product(code, extra_checks=()):
+    """Exactly one product found; every spec output matches products.json."""
+    p = PRODUCTS_BY_CODE[code]
+
+    def check(out):
+        same_number = lambda key, field: (empty(out.get(key)) if p[field] is None
+                                          else out.get(key) == number_text(p[field]))
+        checks = [
+            ("productFound is true", out.get("productFound") is True),
+            ("matchCount is 1", out.get("matchCount") == 1),
+            ("productName matches data", out.get("productName") == p["Name"]),
+            ("productCode matches data", out.get("productCode") == p["ProductCode"]),
+            ("category matches data", out.get("category") == p["Category__c"]),
+            ("maxPressureBar matches data", same_number("maxPressureBar", "Max_Pressure_bar__c")),
+            ("minTemperatureC matches data", same_number("minTemperatureC", "Min_Temperature_C__c")),
+            ("maxTemperatureC matches data", same_number("maxTemperatureC", "Max_Temperature_C__c")),
+            ("connectionSize matches data", out.get("connectionSize") == p["Connection_Size__c"]),
+            ("material matches data", out.get("material") == p["Material__c"]),
+            ("datasheetText matches data", out.get("datasheetText") == p["Datasheet_Text__c"]),
+            ("message is empty", empty(out.get("message"))),
+            ("matchingProducts is empty", empty(out.get("matchingProducts"))),
+            only_allowed_outputs(out),
+            keywords_not_returned(out),
+        ]
+        return checks + [(name, fn(out)) for name, fn in extra_checks]
+    return check
+
+
+def expect_no_product(message, match_count=0):
+    def check(out):
+        checks = [
+            ("productFound is false", out.get("productFound") is False),
+            (f"message is '{message}'", out.get("message") == message),
+            (f"matchCount is {match_count}", out.get("matchCount") == match_count),
+            ("matchingProducts is empty", empty(out.get("matchingProducts"))),
+            only_allowed_outputs(out),
+            keywords_not_returned(out),
+        ]
+        return checks + [(f"{f} not returned", empty(out.get(f))) for f in SPEC_FIELDS]
+    return check
+
+
+def word_matches(term):
+    """The flow's matching rule, computed on products.json: every word (split on spaces) appears in the
+    name, product code or search keywords, case-insensitive, literal text, any order. Active products only."""
+    words = [w.lower() for w in term.strip().split(" ") if w]
+    return sorted(p["Name"] for p in PRODUCTS
+                  if p["IsActive"] and all(
+                      w in f"{p['Name']} {p['ProductCode']} {p.get('Search_Keywords__c') or ''}".lower()
+                      for w in words))
+
+
+def listed_names(out):
+    return [n for n in (out.get("matchingProducts") or "").split("; ") if n]
+
+
+def expect_several(term, extra_checks=()):
+    expected = word_matches(term)
+
+    def check(out):
+        names = listed_names(out)
+        checks = [
+            ("productFound is false", out.get("productFound") is False),
+            (f"matchCount is {len(expected)} (> 1, from products.json)",
+             out.get("matchCount") == len(expected) and len(expected) > 1),
+            ("at most 10 names listed", 0 < len(names) <= 10),
+            ("listed names are real matches", set(names) <= set(expected)),
+            ("all matches listed when there are 10 or fewer", len(expected) > 10 or set(names) == set(expected)),
+            ("several-matches message", out.get("message") == SEVERAL_PRODUCTS),
+            only_allowed_outputs(out),
+            keywords_not_returned(out),
+        ]
+        checks += [(f"{f} not returned", empty(out.get(f))) for f in SPEC_FIELDS]
+        return checks + [(name, fn(out)) for name, fn in extra_checks]
+    return check
+
+
+GPS_TESTS = [
+    ("a_code_part.json", "a) 'DP-200' (part of a code/name) -> Circulation Pump DP-200",
+     expect_product("DIS-PMP-DP-200", [("maxPressureBar is '10'", lambda o: o.get("maxPressureBar") == "10")])),
+    ("b_full_code.json", "b) 'DIS-VLV-BS-DN25' (exact code) -> Ball Valve Stainless DN25",
+     expect_product("DIS-VLV-BS-DN25", [("material is 'Stainless steel AISI 316'",
+                                         lambda o: o.get("material") == "Stainless steel AISI 316")])),
+    ("c_ambiguous.json", "c) 'Ball Valve' -> several matches, customer must choose",
+     expect_several("Ball Valve", [("list contains a brass and a stainless valve",
+                                    lambda o: any("Brass" in n for n in listed_names(o))
+                                    and any("Stainless" in n for n in listed_names(o)))])),
+    ("d_no_pressure.json", "d) 'Pipe Insulation Flexible 13 mm' (exact name) -> found, no pressure",
+     expect_product("DIS-INS-FL-13", [("maxPressureBar is empty, not '0'",
+                                       lambda o: empty(o.get("maxPressureBar")) and o.get("maxPressureBar") != "0")])),
+    ("e_unknown.json", "e) 'XYZ-999' -> not found", expect_no_product(PRODUCT_NOT_FOUND)),
+    ("f_too_short.json", "f) 'ab' (too short) -> fail closed", expect_no_product(PRODUCT_MISSING_INPUT)),
+    ("g_blank.json", "g) blank -> fail closed", expect_no_product(PRODUCT_MISSING_INPUT)),
+    # Word-based search (words in any order, every word must appear in the name or code)
+    ("h_cap_ten_names.json", "h) 'DIS-' -> 29 matches, exactly 10 names listed (cap)",
+     expect_several("DIS-", [("matchCount is 29", lambda o: o.get("matchCount") == 29),
+                             ("exactly 10 names listed", lambda o: len(listed_names(o)) == 10)])),
+    ("i_words_two_matches.json", "i) 'ball valve DN25' -> brass + stainless DN25",
+     expect_several("ball valve DN25", [("matchCount is 2", lambda o: o.get("matchCount") == 2),
+                                        ("both DN25 ball valves listed",
+                                         lambda o: set(listed_names(o)) == {"Ball Valve Brass DN25",
+                                                                            "Ball Valve Stainless DN25"})])),
+    ("j_words_any_order.json", "j) 'DN25 stainless ball valve' -> Ball Valve Stainless DN25",
+     expect_product("DIS-VLV-BS-DN25")),
+    ("k_words_lowercase.json", "k) 'dp-200 pump' -> Circulation Pump DP-200", expect_product("DIS-PMP-DP-200")),
+    # % and _ must be literal characters, never wildcards
+    ("l1_percent_literal.json", "l1) 'ball valve 50%' -> not found (% literal, checked in the flow)",
+     expect_no_product(PRODUCT_NOT_FOUND)),
+    ("l2_underscore_literal.json", "l2) 'ball_valve' -> not found (_ literal, also in the database pre-filter)",
+     expect_no_product(PRODUCT_NOT_FOUND)),
+    ("l3_percent_in_prefilter.json", "l3) 'ball%dn25' -> not found (% literal, also in the database pre-filter)",
+     expect_no_product(PRODUCT_NOT_FOUND)),
+    # Dutch search terms through Search_Keywords__c (matching only, never returned)
+    ("m_dutch_two_matches.json", "m) 'kogelafsluiter DN25' -> brass + stainless DN25",
+     expect_several("kogelafsluiter DN25", [("matchCount is 2", lambda o: o.get("matchCount") == 2),
+                                            ("both DN25 ball valves listed",
+                                             lambda o: set(listed_names(o)) == {"Ball Valve Brass DN25",
+                                                                                "Ball Valve Stainless DN25"})])),
+    ("n_dutch_pump.json", "n) 'circulatiepomp DP-200' -> Circulation Pump DP-200", expect_product("DIS-PMP-DP-200")),
+    ("o_dutch_insulation.json", "o) 'leidingisolatie 13 mm' -> Pipe Insulation Flexible 13 mm",
+     expect_product("DIS-INS-FL-13")),
+    ("p_dutch_rvs.json", "p) 'kogelkraan rvs DN25' -> Ball Valve Stainless DN25 ('rvs' = stainless)",
+     expect_product("DIS-VLV-BS-DN25", [("maxPressureBar is '40'", lambda o: o.get("maxPressureBar") == "40")])),
+    # Only Delta's own catalog is searchable: the Developer Edition sample products are inactive
+    ("q_sample_product_inactive.json", "q) 'diesel' -> not found (sample products are inactive)",
+     expect_no_product(PRODUCT_NOT_FOUND)),
+]
+
+
+def run_get_product_specs(org_args, sf):
+    """Read-only flow: no data is created, so no cleanup. Returns (number of checks run, number failed)."""
+    failures = 0
+    for filename, title, expectations in GPS_TESTS:
+        try:
+            out = call_flow("Get_Product_Specs", GPS_DIR / filename, org_args)
+            checks = expectations(out)
+        except Exception as exc:  # noqa: BLE001  (report and count as a failure)
+            out, checks = {}, [(f"call succeeded ({exc})", False)]
+        if "datasheetText" in out and out["datasheetText"]:
+            out = {**out, "datasheetText": out["datasheetText"][:60] + "…"}  # keep the printed output short
+        failures += report(title, out, checks)
+    return len(GPS_TESTS), failures
+
+
 SUITES = {
     "get_order_status": ("Get_Order_Status", run_get_order_status),
     "create_complaint_case": ("Create_Complaint_Case", run_create_complaint_case),
+    "get_product_specs": ("Get_Product_Specs", run_get_product_specs),
 }
 
 

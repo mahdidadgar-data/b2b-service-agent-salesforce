@@ -1,0 +1,14 @@
+{
+  "required" : [ "productSearch" ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "productSearch" : {
+      "title" : "productSearch",
+      "description" : "Required. A product name, part of a name, or a product code, for example DP-200, DIS-VLV-BS-DN25 or Ball Valve Brass DN25.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}
