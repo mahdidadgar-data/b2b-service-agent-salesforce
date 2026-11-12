@@ -1,0 +1,35 @@
+{
+  "required" : [ "customerNumber", "productSearch", "quantity" ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "customerNote" : {
+      "title" : "customerNote",
+      "description" : "Optional. A short note from the customer (stored cut to 255 characters). Only pass a note the customer actually gave (for example a delivery wish or project name); never invent one.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "customerNumber" : {
+      "title" : "customerNumber",
+      "description" : "Required. The customer's customer number, for example C-1001. Always ask the customer for it. Never guess it.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "productSearch" : {
+      "title" : "productSearch",
+      "description" : "Required. The product: a name, part of a name, or a product code, in Dutch or English (for example kogelkraan rvs DN25 or DP-200). Pass the product as the customer described it. Never guess which product is meant.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "quantity" : {
+      "title" : "quantity",
+      "description" : "Required. The quantity: a whole number from 1 to 10,000. Kept with decimals so that a value like 2.5 is rejected instead of rounded. Convert words like 'forty' to 40, but never round or change the number the customer gave. Always ask the customer for it. Never guess it.",
+      "lightning:type" : "lightning__numberType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

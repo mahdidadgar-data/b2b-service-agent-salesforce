@@ -87,6 +87,15 @@ becomes the main demo.
   Edition sample products deactivated (`scripts/deactivate-sample-products.ps1`). Agent **Version 3** committed
   in the builder (not activated) and retrieved: Product Information subagent, bilingual welcome, "language of the
   most recent message". API tests 32/32; Preview tests 1–9 pass. Open items consolidated at the end of the log.
+- **Step 6c (12 Nov):** flow `Create_Quote_Request` (v1): quote request → Opportunity. Reuses `Get_Product_Specs`
+  as a subflow (one search for specs and quotes); no OpportunityLineItem (needs a price; the agent never prices);
+  5 new Opportunity fields (`Requested_Product__c`, `Requested_Quantity__c`, `Quote_Request_Number__c` auto-number
+  `QR-{0000}`, `Created_By_Agent__c`, `Customer_Note__c`); duplicate = account + product, agent-created only;
+  quantity whole 1–10,000 (2.5 rejected); note cut to 255. Agent user: Opportunity read + create only. Finding:
+  the Einstein Agent User profile grants FLS on Amount/ExpectedRevenue/Probability (permission sets only add).
+  `Get_Product_Specs` v4: plural tolerance (stem rule) + irregular Dutch plurals as keywords (21 products).
+  Agent **Version 4** committed in the builder (not activated) and retrieved: Quote Request subagent. API tests
+  54/54; Preview tests 1–6 (QR-0003 and QR-0007 on C-1011 are Preview evidence: leave them alone).
 
 ## Timeline
 | Day | Date | Goal |
@@ -112,6 +121,10 @@ becomes the main demo.
   no randomness). A fixed reference date is on the Step 8 list.
 - **Product keywords** (`Product2.Search_Keywords__c`, matching only, never an output): keywords may add names
   and synonyms, never properties the data doesn't confirm (check material words against `Material__c`).
+- **Tests that create records use up auto-numbers.** The complaint and quote suites delete their own records,
+  but case numbers and `QR-…` numbers are never reused, so every run leaves gaps. Fine in this Developer org;
+  in a real project, run these tests in a sandbox. Don't use C-1011 + DP-200 or C-1011 + DIS-VLV-BS-DN25 in
+  tests (open Preview requests QR-0003 and QR-0007).
 - **Learning log:** after each step, add a section to `docs/learning-log.md` (what was done, what was
   learned, problems and solutions, link to the FDE role, possible interview questions). At the end it
   becomes a printable PDF with a full interview-question section. Keep the steps in order (Step 1, 2, 3, ...).

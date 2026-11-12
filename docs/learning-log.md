@@ -1312,6 +1312,276 @@ filter.
 
 ---
 
+## Step 6c (Day 2, 12 Nov 2026): Quote request → Opportunity
+
+### Goal
+UC3 (quote requests): a business customer asks for a quote for a product and a quantity, and the
+agent registers it as an Opportunity for the sales team, in English or Dutch ("offerte",
+"prijsopgave"). The agent never gives a price, a discount, stock or a delivery time; that is the
+sales colleague's job.
+
+### Design
+| Decision | Why |
+|---|---|
+| **A write action, built like 6a** | Same pattern as the complaint flow: check the customer, check for a duplicate, create, read back the generated number, return a message. Fault paths on the create and the read-back |
+| **Reuse `Get_Product_Specs` as a subflow** | One product search for specs and quotes. Every search improvement (Dutch keywords, plurals) helps both use cases at once, and the tested search is not copied |
+| **No OpportunityLineItem** | A line item needs a price book entry and a unit price. The agent never touches prices, so product and quantity go into custom fields on the Opportunity and sales adds the priced lines |
+| **Custom fields for the request** | `Requested_Product__c` (lookup to Product2), `Requested_Quantity__c` (whole number), `Customer_Note__c` (Text 255), plus the existing `Requested_Items__c` as readable text ("40x Ball Valve Stainless DN25") |
+| **QR auto-number** | `Quote_Request_Number__c`, format `QR-{0000}`: a short reference the customer can quote, read back after the create |
+| **Duplicate = account + product, agent-created only** | An open agent request for the same product returns the existing QR number. A request a human created does **not** block the agent, on purpose: the agent should not hide behind sales' own pipeline |
+| **Quantity validated in the flow** | A whole number from 1 to 10,000. The input keeps decimals, so 2.5 is **rejected**, not silently rounded to 3 |
+| **A long note is cut to 255** | `LEFT(note, 255)`, so a long customer message never makes the create fail |
+| **Fixed values** | Stage Prospecting, close date today + 30, lead source Web, `Created_By_Agent__c` = Agentforce; `Amount` is never set |
+
+The flow path of `Create_Quote_Request`:
+1. Inputs present? Quantity valid?
+2. Customer found (`Account.Customer_Number__c`)?
+3. Product: the `Get_Product_Specs` subflow. Exactly one active product continues; several matches
+   return the names; none returns "not found".
+4. Open agent request for this account + product? Return the existing QR number.
+5. Create the Opportunity (10 fields, an explicit list), read back the QR number, return the
+   message: "Your quote request QR-… for 40 x … has been registered. A sales colleague will contact
+   you with a quote."
+
+### Least privilege and "the profile is the floor"
+- **Object access for the agent user** (`Delta_Agent_Access`): Opportunity **read + create only**;
+  no edit, no delete, no View All or Modify All.
+- **Field access:** read + edit on the five request fields; the QR number read only. The admin
+  permission set `Delta_Data_Access` got the same fields with read + edit.
+- **Finding:** the agent user's profile, **Einstein Agent User**, already gives field access to
+  `Amount`, `ExpectedRevenue` and `Probability`. Permission sets are **additive**: they can add
+  access, never take it away. The profile is the floor.
+- **How the agent is still protected:**
+  - The flow reads and writes an **explicit field list**, so `Amount` is never set or returned.
+  - Test g checks every call for price words in all output keys and values.
+- **Production advice:** a custom minimal profile for the agent user (Step 8 list).
+
+### What I built
+- **5 Opportunity fields** and both permission sets, deployed and verified with a
+  `FieldPermissions` query across all assigned permission sets.
+- **Flow `Create_Quote_Request`** (v1, active), written as metadata.
+- **`Get_Product_Specs` v4:** plural tolerance (problem d), plus 9 irregular Dutch plurals as
+  search keywords on 21 products.
+- **Tests:** a new `create_quote_request` suite, plus product tests r–x.
+
+### API test results
+`python tests/run_flow_tests.py --org delta-dev`: **54 passed, 0 failed**.
+
+| Suite | Result |
+|---|---|
+| Get_Order_Status | 5 of 5 |
+| Create_Complaint_Case | 8 of 8 (with cleanup) |
+| Get_Product_Specs | 26 of 26 (a–q as before, plus r–x below) |
+| Create_Quote_Request | 15 of 15, below |
+
+| Test | Input | Result |
+|---|---|---|
+| a | C-1004 + `kogelkraan rvs DN25` x 40, with a note | Created; every field checked, `Amount` empty, 0 opportunity products |
+| b | The same again | No new record; the QR number from test a, duplicate message |
+| c | `ball valve DN25` | No record; the 2 DN25 valves listed |
+| d, e | Unknown product, unknown customer C-9999 | No record; neutral messages |
+| f1–f5 | Quantity 0, -5, 2.5, 20000, blank | No record; 2.5 rejected, not rounded |
+| h | A 300-character note | Created; note stored at exactly 255 characters |
+| i | `circulatiepompen DP-300` x 5 (plural) | Created, through the plural-tolerant subflow |
+| g | Every call | No "price", "amount", "discount", "prijs", "korting" or "€" in any output key or value |
+| Cleanup | | Deletes only the records this run created (by Id) |
+| Untouched | | The existing opportunities have the same Ids and `LastModifiedDate` before and after |
+
+| Product test | Search term | Result |
+|---|---|---|
+| r | `circulatiepompen DP-200` | Circulation Pump DP-200 |
+| s | `DP-200 pumps` | Circulation Pump DP-200 |
+| t | `ball valves DN25` | 2 matches |
+| u | `kogelkranen rvs DN25` | Ball Valve Stainless DN25 (irregular plural keyword) |
+| v | `rvs` | 7 matches, as before (short words are never stemmed) |
+| w, x | `knieën`, `knieen` | The 3 press elbows (with and without the diaeresis) |
+
+### Agent side: Quote Request subagent (Version 4)
+Agent Version 4 is committed in the builder (not activated) and retrieved into Git: 25 new files.
+A secret scan of those 25 files, including 4 decoded base64 blocks, was clean. The only email-like
+value is the agent user's username, which Versions 1–3 already contain.
+
+- **New subagent, Quote Request.** Its description says what it is for, in both languages, *and
+  what not*: "Registers a quote request for the sales team when a business customer asks for a
+  quote, offer or price for a specific product and quantity (offerte, prijsopgave). The agent
+  never gives prices, discounts or delivery times itself. **Not for technical specifications, order
+  status, complaints or questions about existing quotes.**"
+- **6 instructions:**
+  1. Collect customer number, product and quantity; never guess.
+  2. Run the action, without asking for confirmation itself.
+  3. On success, give the QR number.
+  4. On several matches, list them and ask.
+  5. In all other cases, give the action's message.
+  6. Prices, discounts, stock and delivery times: a sales colleague will include them in the quote.
+- **The action Create Quote Request:**
+  - **Platform confirmation** (`require_user_confirmation`).
+  - **3 required inputs.** Each says "never guess". The quantity input says: "Convert words like
+    'forty' to 40, but never round or change the number the customer gave."
+  - **The customer note is optional:** "Only pass a note the customer actually gave … never invent
+    one."
+  - **Loading text:** "Registering your quote request...".
+- **Transitions:**
+
+  | From | To |
+  |---|---|
+  | Agent Router, Product Information | Quote Request |
+  | Quote Request | Escalation, Product Information, Order Inquiries, Complaints (4 exits) |
+
+- **System instructions:**
+  - The agent now helps with "four things" (order status, complaints, product specifications,
+    quote requests).
+  - The price rule became: "If the customer wants a price, offer to register a quote request for
+    the sales team." A price question now has a useful next step instead of only a refusal.
+- **Welcome message:** names all 4 use cases, in English and Dutch.
+
+### Preview test results (Version 4, as the agent user)
+
+| # | Test | Result |
+|---|---|---|
+| 1 | DP-200 specs, then "a quote for 12 of those pumps", C-1011 | ✅ Product Information → Quote Request; one platform confirmation; **QR-0003** created; no price |
+| 2 | The same request again, in the same conversation | ⚠️ The agent answered from memory, without an action call. Correct, but not proof |
+| 3 | **Fresh session**, Dutch: "12 stuks DP-200", C-1011 | ✅ The action ran, and the flow returned the existing **QR-0003**: duplicate protection proven at flow level |
+| 4 | Price per pump and a discount for 50 | ✅ No figure; a sales colleague will include it in the quote; offered a quote request |
+| 5 | "12 circulatiepompen DP-200" (before the plural fix) | ❌ Product not found, no record: failed safely (led to problem d) |
+| 6 | After the fix: "20 kogelkranen rvs DN25", C-1011, delivery to a project in Breda | ✅ **QR-0007**, note stored ("Levering op ons project in Breda"), `Amount` empty |
+
+The Preview records were created by the agent user (`CreatedBy` = EinsteinServiceAgent User):
+proof that the agent's permissions are enough, and that no admin access was used. QR-0003 and
+QR-0007 stay in the org as evidence of the Preview tests.
+
+![Specs, then a quote request: Product Information hands over to Quote Request](images/agent-specs-to-quote-request.png)
+
+![Fresh session: the flow returns the existing QR-0003](images/agent-quote-duplicate-protection.png)
+
+![Dutch plural after the fix: "kogelkranen" gives QR-0007](images/agent-quote-dutch-plural.png)
+
+### What I learned
+- **Reuse beats copying.** Calling the product search as a subflow meant the plural fix (problem d)
+  fixed specs **and** quotes in one change, tested once.
+- **The data model follows the guardrail.** "The agent never touches prices" ruled out
+  OpportunityLineItem, which needs a price. Custom fields carry the request instead.
+- **Permission sets only add.** The profile is the floor, so least privilege needs a minimal
+  profile too; until then, the explicit field list and test g carry the protection.
+- **Validate where the data is written.** The quantity rule lives in the flow, not only in the
+  prompt: 2.5 is rejected even if the model passes it on.
+- **Conversation memory is not a test.** A repeated request in the same session proves nothing
+  about the flow; only a fresh session does.
+- **Check a rule against the real data before deploying.** A simulation of the plural rule on
+  `products.json` showed that "pumps" would be missed, before anything changed in the org.
+
+### Problems I hit and how I solved them
+
+**a) A subflow can't have a fault connector.**
+- *Problem:* the first deploy of `Create_Quote_Request` failed: "Element faultConnector invalid at
+  this location in type FlowSubflow". I had planned a fault path on the subflow too.
+- *Diagnosis:* in Flow, a subflow element has no fault path; only elements such as Get Records and
+  Create Records do.
+- *Fix:* removed it. An error inside the product search now ends as a flow error instead of the
+  friendly message. The create and the read-back keep their fault paths.
+- *Risk accepted:* the subflow only reads data. It is on the Step 8 list.
+- *Lesson:* check what the platform supports before promising a design; the deploy is the real
+  validator.
+
+**b) The auto-number did not number the existing records.**
+- *Problem:* I expected the 3 existing demo opportunities to get QR-0001 to QR-0003 when the field
+  was added.
+- *Diagnosis:* I took a snapshot (Id → `LastModifiedDate`) before the deploy and compared it after.
+  The 3 records got **no** QR number, and their `LastModifiedDate` and `SystemModstamp` were
+  unchanged: they were not touched at all. The first agent request got QR-0001.
+- *Lesson:* a new auto-number field does not backfill existing records. Verify with a before
+  snapshot instead of assuming.
+
+**c) Auto-numbers are never reused.**
+- *Problem:* every test run that creates records uses up QR numbers, even though the cleanup
+  deletes the records. The API test runs used QR-0001, QR-0002 and QR-0004 to QR-0006; the
+  Preview tests created QR-0003 and QR-0007.
+- *Lesson:* tests that create records belong in a sandbox, not in a production org, where the gaps
+  would confuse sales.
+
+**d) Plurals: "circulatiepompen" and "pumps" not found.**
+- *Problem:* Preview test 5. "Ik wil graag een offerte voor 12 circulatiepompen DP-200" gave
+  "product not found", and no record was created. Customers naturally use the plural with a
+  quantity.
+- *Diagnosis:* "circulatiepompen" is not contained in the keyword "circulatiepomp"; in English,
+  "pumps" is not contained in "Pump".
+- *Fix, in `Get_Product_Specs` (v4):*
+  - **Stem rule:** a word of 6+ letters ending in "en" or "es" loses those 2 letters; otherwise a
+    word of 5+ letters ending in "s" loses the s. The stem is at least 4 letters.
+  - **Why it stays safe:** the stem is always a prefix of the word, so this only loosens matching
+    by a suffix. The rule "every word must match" stays.
+  - **Short words are never stemmed:** "rvs", "DN25" and "DIS-" behave exactly as before.
+  - **Irregular Dutch plurals go in the keywords** (names, not properties): kogelkranen, kranen,
+    terugslagkleppen, keerkleppen, knieën, t-stukken, tees, isolatieschalen, buisklemmen.
+  - **Diaeresis:** "knieën" was read back from the org with the real "ë" (U+00EB); "knieen"
+    finds the same products through the stem "knie".
+- *Checked against the data first:* I simulated the rule on `products.json` before changing
+  anything. The first proposal stemmed only words longer than 5 letters, which would have missed
+  "pumps" (exactly 5 letters). Across the catalog vocabulary, the final rule changes only the
+  intended plurals (Fittings, pipes, Pumps, Valves).
+- *Result:* specs **and** quotes find plurals, thanks to the subflow (Preview test 6, API tests
+  r–x and quote test i).
+- *Lesson:* test with the words customers actually use, and simulate a matching rule on the real
+  data before deploying it.
+
+**e) The agent answers repeats from conversation memory.**
+- *Problem:* in Preview test 2, the same request in the same conversation was answered without an
+  action call (the same behaviour as in Step 6b).
+- *Diagnosis:* the answer was correct, but it came from the model's memory, so it proved nothing
+  about the duplicate protection.
+- *Fix:* the flow's duplicate check is the hard guarantee. I proved it in a **fresh session**
+  (Preview test 3), where the action ran and returned the existing QR-0003.
+- *Lesson:* never treat model memory as a control. Put the guarantee in the action and test it
+  where memory cannot help.
+
+| Problem | Cause | Solution |
+|---|---|---|
+| First deploy failed | A subflow has no fault connector | Removed; risk accepted (read-only); Step 8 list |
+| Existing records got no QR number | Auto-number does not backfill | Verified with a before snapshot; records untouched |
+| QR numbers have gaps | Auto-numbers are never reused | Record-creating tests belong in a sandbox |
+| "circulatiepompen", "pumps" not found | Plural not contained in the singular | Stem rule in the shared subflow + irregular plurals as keywords |
+| Repeat answered from memory | The model reuses conversation context | Duplicate check in the flow, proven in a fresh session |
+
+### Link to the FDE role
+- **Design trade-offs a client cares about:**
+  - No line items, because the agent never prices.
+  - A duplicate rule that never blocks on sales' own work.
+  - Validation where the data is written.
+- **Least privilege in practice:** read + create only, and the discovery that a profile can
+  undercut a permission-set design. A real deployment needs that conversation with the client's
+  admin.
+- **Reuse as a delivery speed-up:** one search action serves two use cases, so one fix reaches
+  both.
+- **Evidence over impressions:** a correct-looking repeat in Preview wasn't accepted as proof; the
+  fresh-session test was.
+
+### Possible interview questions
+- *Why didn't you create Opportunity Products for the requested items?*
+  A line item needs a price book entry and a unit price, and the agent must never touch prices.
+  So the product and quantity go into custom fields, and the sales colleague adds the priced
+  lines when making the quote.
+- *How do you prevent duplicate quote requests?*
+  In the flow, not in the prompt: an open, agent-created request for the same account and product
+  returns the existing QR number. I proved it in a fresh Preview session, because in the same
+  session the model answered from memory without calling the action.
+- *Your permission set gives the agent no access to Amount. Is that enough?*
+  No. Permission sets only add access, and the Einstein Agent User profile already grants field
+  access to Amount, ExpectedRevenue and Probability. The flow's explicit field list and a test on
+  every output protect it now; in production, I'd give the agent user a custom minimal profile.
+- *Why did you reuse the product search as a subflow?*
+  One search for specs and quotes means one place to improve and test. When customers used
+  plurals, one fix in the subflow made both use cases work.
+- *How did you make the search plural-tolerant without making it too loose?*
+  A word only loses a plural ending ("en", "es", "s") if the stem stays at least 4 letters, so
+  short words such as "rvs" and "DN25" are untouched. The stem is a prefix of the word, and every
+  word must still match. I simulated the rule on the catalog first; it changed only the intended
+  plurals, and it showed that my first threshold would have missed "pumps".
+- *What happens if the customer says "two and a half" or "forty"?*
+  The action description tells the model to convert "forty" to 40 but never round. The flow then
+  rejects anything that is not a whole number from 1 to 10,000, so 2.5 gets a clear message and
+  no record.
+
+---
+
 ## Open items for Step 8 (consolidated)
 The per-step tables above are kept as history; this is the current list.
 
@@ -1326,6 +1596,12 @@ The per-step tables above are kept as history; this is the current list.
 | Latency of about 20–25 s per spec answer | Step 6b |
 | Short search words pre-filter weakly with a large catalog | Step 6b |
 | A permanent test for double spaces in the search term | Step 6b |
+| Route quote requests to the account owner (`OwnerId = Account.OwnerId`); check whether the agent user can create a record with another owner without Transfer Record | Step 6c |
+| A custom minimal profile for the agent user (permission sets only add; the Einstein Agent User profile grants FLS on Amount, ExpectedRevenue and Probability) | Step 6c |
+| The product subflow in `Create_Quote_Request` has no fault path (Flow doesn't support one on a subflow element) | Step 6c (problem a) |
+| The platform confirmation is sometimes in English after a Dutch question, and uses informal "je" instead of formal "u" | Step 6c |
+| The confirmation text appears before the flow checks (as in 6a): "I'm going to request a quote…", then a duplicate or "not found" message | Step 6c |
+| A quantity change on an existing open request is only visible in the conversation: the flow returns the existing QR number, so sales does not see the new quantity | Step 6c |
 
 ---
 

@@ -1,0 +1,62 @@
+{
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "carrier" : {
+      "title" : "carrier",
+      "description" : "Transport company, if shipped.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "delayReason" : {
+      "title" : "delayReason",
+      "description" : "Reason for a delay, only when the status is Delayed.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "deliveryStatus" : {
+      "title" : "deliveryStatus",
+      "description" : "Delivery status: Received, In Preparation, Shipped, Delivered or Delayed.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "expectedDeliveryDate" : {
+      "title" : "expectedDeliveryDate",
+      "description" : "Date the customer can expect the delivery.",
+      "lightning:type" : "lightning__dateType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "message" : {
+      "title" : "message",
+      "description" : "Short message for the customer when the order is not found.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "orderFound" : {
+      "title" : "orderFound",
+      "description" : "True if the order exists and belongs to this customer.",
+      "lightning:type" : "lightning__booleanType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "trackingNumber" : {
+      "title" : "trackingNumber",
+      "description" : "Carrier tracking reference, if available.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

@@ -98,19 +98,20 @@ def make_products():
             f"{dn} / {inch}", "Nickel-plated brass (CW617N)",
             "Shut-off for heating, cooling and compressed air installations.",
             "Full bore. Not approved for gas installations.",
-            "kogelafsluiter, kogelkraan, afsluiter, kraan, messing, vernikkeld, shut-off valve, isolation valve")
+            "kogelafsluiter, kogelkraan, afsluiter, kraan, messing, vernikkeld, shut-off valve, isolation valve, "
+            "kogelkranen, kranen")
         add(f"DIS-VLV-BS-{dn}", f"Ball Valve Stainless {dn}", "Valves", price_ss, 40.0, -30, 180,
             f"{dn} / {inch}", "Stainless steel AISI 316",
             "Shut-off for process water, chemicals (check compatibility) and steam up to 180 °C.",
             "Full bore. Seals PTFE.",
             "kogelafsluiter, kogelkraan, afsluiter, kraan, rvs, roestvast staal, roestvrij staal, inox, "
-            "shut-off valve, isolation valve")
+            "shut-off valve, isolation valve, kogelkranen, kranen")
     for dn, price in [("DN25", 44.50), ("DN50", 96.00)]:
         add(f"DIS-VLV-CK-{dn}", f"Check Valve {dn}", "Valves", price, 16.0, -10, 100,
             dn, "Brass body, stainless steel spring",
             "Prevents backflow in pumped water systems.",
             "Install in the direction of the arrow on the body.",
-            "terugslagklep, terugslagventiel, keerklep, messing, non-return valve")
+            "terugslagklep, terugslagventiel, keerklep, messing, non-return valve, terugslagkleppen, keerkleppen")
 
     # Fittings
     for size, price in [("15 mm", 1.85), ("22 mm", 2.60), ("28 mm", 3.95)]:
@@ -118,13 +119,14 @@ def make_products():
             size, "Copper with EPDM O-ring",
             "Press connection for copper pipe in heating and drinking water.",
             "Use the matching press profile (V-profile).",
-            "persfitting, persbocht, bocht, knie, koper, 90 graden, press elbow")
+            "persfitting, persbocht, bocht, knie, koper, 90 graden, press elbow, knieën")
     for dn, price in [("DN25", 6.20), ("DN50", 14.80)]:
         add(f"DIS-FIT-TS-{dn}", f"Threaded Tee Stainless {dn}", "Fittings", price, 25.0, -30, 200,
             dn, "Stainless steel AISI 316",
             "Branch connection in process and industrial piping.",
             "BSP thread. Use suitable thread sealant.",
-            "t-stuk, draadfitting, schroefdraad, rvs, roestvast staal, roestvrij staal, inox, tee piece")
+            "t-stuk, draadfitting, schroefdraad, rvs, roestvast staal, roestvrij staal, inox, tee piece, "
+            "t-stukken, tees")
 
     # Insulation (no pressure rating)
     for thickness, price in [("13 mm", 4.10), ("19 mm", 5.75), ("25 mm", 7.90)]:
@@ -138,7 +140,7 @@ def make_products():
         None, 0, 250, "50 mm wall, pipe up to 114 mm", "Mineral wool with aluminium foil",
         "High-temperature insulation for steam and hot process pipes. Sold per 1 m length.",
         "Fire class A2L-s1,d0. Wear gloves and a dust mask when cutting.",
-        "leidingisolatie, buisisolatie, isolatie, isolatieschaal, minerale wol, pipe lagging")
+        "leidingisolatie, buisisolatie, isolatie, isolatieschaal, minerale wol, pipe lagging, isolatieschalen")
 
     # Fixings
     for size, price in [("15-19 mm", 1.10), ("26-30 mm", 1.45), ("48-53 mm", 2.30)]:
@@ -146,7 +148,7 @@ def make_products():
             None, -20, 100, size, "Galvanised steel, EPDM lining",
             "Fixing pipes to walls and ceilings with noise and vibration damping.",
             "Includes M8/M10 combination nut.",
-            "buisbeugel, pijpbeugel, leidingbeugel, beugel, buisklem, pipe clip, pipe bracket")
+            "buisbeugel, pijpbeugel, leidingbeugel, beugel, buisklem, pipe clip, pipe bracket, buisklemmen")
 
     return products
 

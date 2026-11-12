@@ -9,14 +9,14 @@ evaluation set and monitoring.
 > end to end, following the Forward Deployed Engineer way of working.
 
 ## Status
-🚧 In progress: Step 6b done (product specifications, Dutch and English; Agentforce agent Version 3).
+🚧 In progress: Step 6c done (quote requests → Opportunity; all four use cases built; Agentforce agent Version 4).
 
 ## Use cases
 | # | Use case | Agent action | Status |
 |---|---|---|---|
 | 1 | Order and delivery status | Flow `Get_Order_Status` (only the customer's own orders) | Done (Steps 4–5) |
-| 2 | Product specifications | Flow `Get_Product_Specs` (word-based search, Dutch keywords, no prices or stock) | Done (Step 6b) |
-| 3 | Quote requests → Opportunity | – | Planned (Step 6c) |
+| 2 | Product specifications | Flow `Get_Product_Specs` (word-based, plural-tolerant search, Dutch keywords, no prices or stock) | Done (Steps 6b–6c) |
+| 3 | Quote requests → Opportunity | Flow `Create_Quote_Request` (reuses the product search as a subflow; QR number, duplicate protection, no prices) | Done (Step 6c) |
 | 4 | Complaints and returns → Case | Flow `Create_Complaint_Case` (duplicate protection, confirmation) | Done (Step 6a) |
 
 ## Planned structure
@@ -42,8 +42,9 @@ Permission set assignments and records are data, so a new org needs these steps,
    python data/preflight.py --org <alias>
    python data/load_data.py --org <alias>
    ```
-   An org loaded *before* the keyword field existed only needs the keywords added
-   (dry run first; only `Search_Keywords__c` is written, matched on ProductCode):
+   An org loaded *before* the keyword field existed, or before the keywords changed (Step 6c added
+   irregular plurals), only needs the keywords updated (dry run first; only `Search_Keywords__c` is
+   written, matched on ProductCode):
    ```powershell
    python data/update_product_keywords.py --org <alias>            # dry run
    python data/update_product_keywords.py --org <alias> --apply
@@ -62,6 +63,10 @@ Permission set assignments and records are data, so a new org needs these steps,
 
 Never regenerate the order data on another day without a fixed reference date: order dates are
 relative to the day the generator runs (`python data/generate_data.py --only products` is safe).
+
+Run the API tests (`python tests/run_flow_tests.py --org <alias>`) in a sandbox or developer org,
+not in production: the complaint and quote suites create records and delete them again, but
+auto-numbers (case numbers, `QR-…`) are never reused, so every run leaves gaps in the numbering.
 
 ## Screenshots
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Quote_Request_Number__c</fullName>
+    <label>Quote Request Number</label>
+    <type>AutoNumber</type>
+    <displayFormat>QR-{0000}</displayFormat>
+    <externalId>false</externalId>
+    <inlineHelpText>Reference number the customer receives for a quote request (assigned by Salesforce).</inlineHelpText>
+</CustomField>

@@ -1,5 +1,5 @@
 """
-API tests for the agent actions (Flows): order status, complaints and product specs.
+API tests for the agent actions (Flows): order status, complaints, product specs and quote requests.
 
 Calls each flow the same way an agent or integration does: through the REST invocable-action
 endpoint (/actions/custom/flow/<FlowName>). Every call goes through the Salesforce CLI
@@ -47,9 +47,29 @@ Suite 3: Get_Product_Specs (UC2: product and spec questions; read-only, no clean
     o) "leidingisolatie 13 mm" -> found,      p) "kogelkraan rvs DN25" -> Ball Valve Stainless DN25
     q) "diesel"                -> not found: only Delta's catalog is active (the Developer Edition
                                   sample products, e.g. GenWatt Diesel, are deactivated)
+    Plural tolerance: a word also matches through its stem (6+ letters ending in "en"/"es" lose 2 letters,
+    otherwise 5+ letters ending in "s" lose the s); irregular plurals come from the keywords:
+    r) "circulatiepompen DP-200" -> found,    s) "DP-200 pumps" -> found,
+    t) "ball valves DN25"        -> 2 matches, u) "kogelkranen rvs DN25" -> Ball Valve Stainless DN25
+    v) "rvs" -> 7 matches as before (short words are never stemmed; "ab", "DIS-", "diesel" = f, h, q)
+    w) "knieën" (keyword with diaeresis) and x) "knieen" (stem "knie") -> the 3 press elbows
   Every test also checks that no keyword text (Search_Keywords__c) appears in any output value.
   Every test also checks that the flow returns no outputs beyond the declared spec fields
   (no prices, stock or other data).
+
+Suite 4: Create_Quote_Request (UC3: quote request -> Opportunity; writes data, cleans up)
+  Request bodies:  tests/flows/create_quote_request/*.json
+    a) own customer + "kogelkraan rvs DN25" x 40 -> created; every field checked, Amount empty, no line items
+    b) the same again                          -> no new record, the existing QR number
+    c) "ball valve DN25"                       -> 2 matches listed, no record
+    d) unknown product, e) unknown customer    -> no record (neutral messages)
+    f1-f5) quantity 0, -5, 2.5, 20000, blank   -> no record
+    h) a 300-character note                    -> created, note stored at exactly 255 characters
+    i) "circulatiepompen DP-300" x 5 (plural)  -> created (plural tolerance through the product subflow)
+    g) on every call: no price/amount/discount in any output key, and no price words
+       ("price", "amount", "discount", "prijs", "korting", "€") in any output value
+  Opportunities are counted before and after every call; the run deletes only its own records and then
+  checks that the existing opportunities are untouched (same Ids and LastModifiedDate).
 
 Run:  python tests/run_flow_tests.py                      (default org, all suites)
       python tests/run_flow_tests.py --org delta-dev
@@ -59,9 +79,11 @@ Exit code 0 = all tests passed, 1 = at least one failure.
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -392,10 +414,22 @@ def expect_no_product(message, match_count=0):
     return check
 
 
+def word_stem(word):
+    """The flow's plural tolerance (formula nextWordStem): 6+ characters ending in 'en'/'es' lose 2 letters,
+    otherwise 5+ characters ending in 's' lose the s. The stem is at least 4 characters and a prefix of the word."""
+    lw = word.lower()
+    if len(word) >= 6 and lw[-2:] in ("en", "es"):
+        return word[:-2]
+    if len(word) >= 5 and lw[-1] == "s":
+        return word[:-1]
+    return word
+
+
 def word_matches(term):
-    """The flow's matching rule, computed on products.json: every word (split on spaces) appears in the
-    name, product code or search keywords, case-insensitive, literal text, any order. Active products only."""
-    words = [w.lower() for w in term.strip().split(" ") if w]
+    """The flow's matching rule, computed on products.json: every word (split on spaces), or its stem without
+    a plural ending, appears in the name, product code or search keywords, case-insensitive, literal text,
+    any order. Active products only."""
+    words = [word_stem(w).lower() for w in term.strip().split(" ") if w]
     return sorted(p["Name"] for p in PRODUCTS
                   if p["IsActive"] and all(
                       w in f"{p['Name']} {p['ProductCode']} {p.get('Search_Keywords__c') or ''}".lower()
@@ -476,6 +510,26 @@ GPS_TESTS = [
     # Only Delta's own catalog is searchable: the Developer Edition sample products are inactive
     ("q_sample_product_inactive.json", "q) 'diesel' -> not found (sample products are inactive)",
      expect_no_product(PRODUCT_NOT_FOUND)),
+    # Plural tolerance: a word also matches through its stem without "en"/"es"/"s" (customers use the plural
+    # with a quantity); irregular Dutch plurals (kranen) come from the keywords
+    ("r_plural_dutch.json", "r) 'circulatiepompen DP-200' -> Circulation Pump DP-200 (stem 'circulatiepomp')",
+     expect_product("DIS-PMP-DP-200")),
+    ("s_plural_english.json", "s) 'DP-200 pumps' -> Circulation Pump DP-200 (5 letters: stem 'pump')",
+     expect_product("DIS-PMP-DP-200")),
+    ("t_plural_two_matches.json", "t) 'ball valves DN25' -> brass + stainless DN25",
+     expect_several("ball valves DN25", [("matchCount is 2", lambda o: o.get("matchCount") == 2),
+                                         ("both DN25 ball valves listed",
+                                          lambda o: set(listed_names(o)) == {"Ball Valve Brass DN25",
+                                                                             "Ball Valve Stainless DN25"})])),
+    ("u_irregular_plural.json", "u) 'kogelkranen rvs DN25' -> Ball Valve Stainless DN25 (irregular plural keyword)",
+     expect_product("DIS-VLV-BS-DN25")),
+    # Regression: short words are never stemmed ('ab', 'DIS-' and 'diesel' are tests f, h and q above)
+    ("v_short_word_rvs.json", "v) 'rvs' (3 letters, not stemmed) -> 7 stainless matches, as before",
+     expect_several("rvs", [("matchCount is 7", lambda o: o.get("matchCount") == 7)])),
+    ("w_diaeresis.json", "w) 'knieën' (keyword with diaeresis) -> the 3 press elbows",
+     expect_several("knieën", [("matchCount is 3", lambda o: o.get("matchCount") == 3)])),
+    ("x_no_diaeresis.json", "x) 'knieen' (without diaeresis, stem 'knie') -> the 3 press elbows",
+     expect_several("knieen", [("matchCount is 3", lambda o: o.get("matchCount") == 3)])),
 ]
 
 
@@ -494,10 +548,222 @@ def run_get_product_specs(org_args, sf):
     return len(GPS_TESTS), failures
 
 
+# ============================================================ Suite 4: Create_Quote_Request
+CQR_DIR = FLOWS_DIR / "create_quote_request"
+ACCOUNTS = {a["Customer_Number__c"]: a for a in
+            json.loads((ROOT / "data" / "generated" / "accounts.json").read_text(encoding="utf-8"))}
+QR_OUTPUTS = {"quoteRequestCreated", "quoteRequestNumber", "productName", "matchingProducts", "message"}
+QR_MISSING_INPUT = "I need your customer number, the product and the quantity to register a quote request."
+QR_INVALID_QUANTITY = "Please give a whole quantity between 1 and 10,000."
+PRICE_KEY_WORDS = ("price", "amount", "discount")
+PRICE_VALUE_WORDS = ("price", "amount", "discount", "prijs", "korting", "€")
+OPP_FIELDS = ("Id, Name, Account.Customer_Number__c, StageName, CloseDate, LeadSource, Amount, IsClosed, "
+              "Created_By_Agent__c, Requested_Product__r.ProductCode, Requested_Quantity__c, Requested_Items__c, "
+              "Customer_Note__c, Quote_Request_Number__c")
+
+
+def no_price_in_output(out):
+    """Test g, on every call: no price/amount/discount in any output key, and no price words in any value."""
+    keys = [k for k in out if not k.startswith("Flow__") and any(w in k.lower() for w in PRICE_KEY_WORDS)]
+    values = [f"{k}~{w}" for k, v in out.items() if not k.startswith("Flow__") and v is not None
+              for w in PRICE_VALUE_WORDS if w in str(v).lower()]
+    return (f"no price/amount/discount in output keys or values (found: {keys + values})", not keys and not values)
+
+
+def qr_only_declared_outputs(out):
+    extra = sorted(k for k in out if not k.startswith("Flow__") and k not in QR_OUTPUTS)
+    return (f"no outputs beyond the declared ones (extra: {extra})", not extra)
+
+
+def check_quote_created(code):
+    product = PRODUCTS_BY_CODE[code]
+
+    def check(out, inputs, new_ids, sf, ctx, test_id):
+        qr = out.get("quoteRequestNumber") or ""
+        ctx[test_id] = qr
+        qty = int(inputs["quantity"])
+        account = ACCOUNTS[inputs["customerNumber"]]["Name"]
+        checks = [
+            ("quoteRequestCreated is true", out.get("quoteRequestCreated") is True),
+            ("quoteRequestNumber looks like QR-0000", bool(re.fullmatch(r"QR-\d{4,}", qr))),
+            (f"productName is '{product['Name']}'", out.get("productName") == product["Name"]),
+            ("matchingProducts is empty", empty(out.get("matchingProducts"))),
+            ("success message (no price, no promise)", out.get("message") ==
+             f"Your quote request {qr} for {qty} x {product['Name']} has been registered. "
+             "A sales colleague will contact you with a quote."),
+        ]
+        if len(new_ids) != 1:
+            return checks
+        opp = sf.query(f"SELECT {OPP_FIELDS} FROM Opportunity WHERE Id = '{new_ids[0]}'")[0]
+        line_items = sf.query(f"SELECT Id FROM OpportunityLineItem WHERE OpportunityId = '{new_ids[0]}'")
+        close = date.fromisoformat(opp["CloseDate"])
+        note = inputs.get("customerNote")
+        checks += [
+            ("record has the returned QR number", opp["Quote_Request_Number__c"] == qr),
+            ("record is on the customer's account",
+             (opp.get("Account") or {}).get("Customer_Number__c") == inputs["customerNumber"]),
+            (f"Requested_Product__c is {code}", (opp.get("Requested_Product__r") or {}).get("ProductCode") == code),
+            (f"Requested_Quantity__c is {qty}", opp["Requested_Quantity__c"] == qty),
+            ("Name is 'Quote request - <code> x <qty> - <account>'",
+             opp["Name"] == f"Quote request - {code} x {qty} - {account}"[:120]),
+            (f"Requested_Items__c is '{qty}x {product['Name']}'", opp["Requested_Items__c"] == f"{qty}x {product['Name']}"),
+            ("StageName = Prospecting, open", opp["StageName"] == "Prospecting" and opp["IsClosed"] is False),
+            ("CloseDate = today + 30 (±1 day for time zones)",
+             abs((close - (date.today() + timedelta(days=30))).days) <= 1),
+            ("LeadSource = Web", opp["LeadSource"] == "Web"),
+            ("Created_By_Agent__c = Agentforce", opp["Created_By_Agent__c"] == "Agentforce"),
+            ("Amount is empty (never set)", opp["Amount"] is None),
+            ("no opportunity products (no prices)", len(line_items) == 0),
+            ("Customer_Note__c = the note, cut to 255", opp["Customer_Note__c"] == (note[:255] if note else None)),
+        ]
+        return checks
+    return check
+
+
+def check_quote_duplicate(code):
+    product = PRODUCTS_BY_CODE[code]
+
+    def check(out, inputs, new_ids, sf, ctx, test_id):
+        first = ctx.get("a")
+        return [
+            ("quoteRequestCreated is false", out.get("quoteRequestCreated") is False),
+            ("quoteRequestNumber is the request from test a", bool(first) and out.get("quoteRequestNumber") == first),
+            ("duplicate message", out.get("message") ==
+             f"There is already an open quote request {first} for {product['Name']}. A sales colleague will contact you."),
+        ]
+    return check
+
+
+def check_quote_several(term):
+    expected = set(word_matches(term))
+
+    def check(out, inputs, new_ids, sf, ctx, test_id):
+        return [
+            ("quoteRequestCreated is false", out.get("quoteRequestCreated") is False),
+            ("no quoteRequestNumber", empty(out.get("quoteRequestNumber"))),
+            (f"matchingProducts lists the {len(expected)} matches", set(listed_names(out)) == expected
+             and len(expected) == 2),
+            ("several-matches message", out.get("message") == SEVERAL_PRODUCTS),
+            ("no productName", empty(out.get("productName"))),
+        ]
+    return check
+
+
+def check_quote_refused(message):
+    def check(out, inputs, new_ids, sf, ctx, test_id):
+        return [
+            ("quoteRequestCreated is false", out.get("quoteRequestCreated") is False),
+            (f"message is '{message}'", out.get("message") == message),
+            ("no quoteRequestNumber", empty(out.get("quoteRequestNumber"))),
+            ("no productName, no matchingProducts", empty(out.get("productName")) and empty(out.get("matchingProducts"))),
+        ]
+    return check
+
+
+def check_long_note(out, inputs, new_ids, sf, ctx, test_id):
+    checks = check_quote_created("DIS-PMP-DP-200")(out, inputs, new_ids, sf, ctx, test_id)
+    if len(new_ids) == 1:
+        stored = sf.query(f"SELECT Customer_Note__c FROM Opportunity WHERE Id = '{new_ids[0]}'")[0]["Customer_Note__c"]
+        checks.append((f"300-character note stored at exactly 255 (stored: {len(stored or '')})",
+                       len(inputs["customerNote"]) == 300 and len(stored or "") == 255))
+    return checks
+
+
+# (id, request body, title, expected number of new opportunities, checks). Order matters: b repeats a.
+CQR_TESTS = [
+    ("a", "a_own_customer.json", "a) C-1004 + 'kogelkraan rvs DN25' x 40 -> created", 1,
+     check_quote_created("DIS-VLV-BS-DN25")),
+    ("b", "a_own_customer.json", "b) same request again -> duplicate protection", 0,
+     check_quote_duplicate("DIS-VLV-BS-DN25")),
+    ("c", "c_two_matches.json", "c) 'ball valve DN25' -> 2 matches, no record", 0, check_quote_several("ball valve DN25")),
+    ("d", "d_unknown_product.json", "d) unknown product 'XYZ-999' -> no record", 0, check_quote_refused(PRODUCT_NOT_FOUND)),
+    ("e", "e_unknown_customer.json", "e) unknown customer C-9999 -> no record, neutral message", 0,
+     check_quote_refused(CUSTOMER_NOT_FOUND)),
+    ("f1", "f1_qty_zero.json", "f1) quantity 0 -> no record", 0, check_quote_refused(QR_INVALID_QUANTITY)),
+    ("f2", "f2_qty_negative.json", "f2) quantity -5 -> no record", 0, check_quote_refused(QR_INVALID_QUANTITY)),
+    ("f3", "f3_qty_fraction.json", "f3) quantity 2.5 -> no record", 0, check_quote_refused(QR_INVALID_QUANTITY)),
+    ("f4", "f4_qty_too_large.json", "f4) quantity 20000 -> no record", 0, check_quote_refused(QR_INVALID_QUANTITY)),
+    ("f5", "f5_qty_blank.json", "f5) quantity blank -> no record", 0, check_quote_refused(QR_MISSING_INPUT)),
+    ("h", "h_long_note.json", "h) 300-character note -> created, note stored at 255", 1, check_long_note),
+    ("i", "i_plural_product.json", "i) C-1004 + 'circulatiepompen DP-300' x 5 (plural) -> created", 1,
+     check_quote_created("DIS-PMP-DP-300")),
+]
+
+
+def delete_records(sobject, ids, org_args, sf):
+    """Delete exactly these Ids. Returns the number confirmed deleted."""
+    for record_id in ids:
+        result = subprocess.run([SF, "data", "delete", "record", "--sobject", sobject, "--record-id", record_id,
+                                 *org_args], capture_output=True, text=True, encoding="utf-8")
+        if result.returncode != 0:
+            print(f"        could not delete {record_id}: {(result.stdout + result.stderr).strip()[:300]}")
+    remaining = sf.query(f"SELECT Id FROM {sobject} WHERE Id IN ({soql_ids(ids)})") if ids else []
+    return len(ids) - len(remaining)
+
+
+def run_create_quote_request(org_args, sf):
+    """Returns (number of checks run, number failed)."""
+    existing = {r["Id"]: r["LastModifiedDate"] for r in sf.query("SELECT Id, LastModifiedDate FROM Opportunity")}
+    leftover = sf.query("SELECT Quote_Request_Number__c FROM Opportunity WHERE Created_By_Agent__c = 'Agentforce' "
+                        "AND IsClosed = false AND Account.Customer_Number__c = 'C-1004' "
+                        "AND Requested_Product__r.ProductCode IN ('DIS-VLV-BS-DN25', 'DIS-PMP-DP-200', "
+                        "'DIS-PMP-DP-300')")
+    if leftover:
+        print(f"FAIL  precondition: open agent quote request(s) for C-1004 already exist: "
+              f"{[r['Quote_Request_Number__c'] for r in leftover]}. Close or delete them first.")
+        return 1, 1
+
+    failures = 0
+    created = []  # Ids of every opportunity this run created
+    price_checks = []  # test g: one result per call
+    ctx = {}
+    try:
+        for test_id, filename, title, expected_new, checks_for in CQR_TESTS:
+            inputs = json.loads((CQR_DIR / filename).read_text(encoding="utf-8"))["inputs"][0]
+            before = {r["Id"] for r in sf.query("SELECT Id FROM Opportunity")}
+            try:
+                out = call_flow("Create_Quote_Request", CQR_DIR / filename, org_args)
+                call_error = None
+            except Exception as exc:  # noqa: BLE001  (report and count as a failure)
+                out, call_error = {}, exc
+            new_ids = sorted({r["Id"] for r in sf.query("SELECT Id FROM Opportunity")} - before)
+            created += new_ids
+            if call_error:
+                checks = [(f"call succeeded ({call_error})", False)]
+            else:
+                checks = [(f"{expected_new} new opportunity(ies) in the org (found {len(new_ids)})",
+                           len(new_ids) == expected_new)]
+                checks += checks_for(out, inputs, new_ids, sf, ctx, test_id)
+                checks.append(qr_only_declared_outputs(out))
+                price = no_price_in_output(out)
+                price_checks.append((test_id, price[1]))
+                checks.append(price)
+            failures += report(title, out, checks)
+
+        bad = [t for t, ok in price_checks if not ok]
+        ok = len(price_checks) == len(CQR_TESTS) and not bad
+        failures += not ok
+        print(f"{'PASS' if ok else 'FAIL'}  g) no price/amount/discount (also 'prijs', 'korting', '€') in any output key "
+              f"or value, {len(price_checks)} calls checked{f' (failed: {bad})' if bad else ''}")
+    finally:
+        deleted = delete_records("Opportunity", created, org_args, sf)
+        ok = deleted == len(created)
+        failures += not ok
+        print(f"{'PASS' if ok else 'FAIL'}  cleanup: deleted {deleted} of {len(created)} opportunity(ies) created by "
+              f"this run {created}")
+        now = {r["Id"]: r["LastModifiedDate"] for r in sf.query("SELECT Id, LastModifiedDate FROM Opportunity")}
+        same = now == existing
+        failures += not same
+        print(f"{'PASS' if same else 'FAIL'}  existing opportunities untouched: {len(existing)} before, {len(now)} after "
+              f"cleanup, same Ids and LastModifiedDate")
+    return len(CQR_TESTS) + 3, failures
+
+
 SUITES = {
     "get_order_status": ("Get_Order_Status", run_get_order_status),
     "create_complaint_case": ("Create_Complaint_Case", run_create_complaint_case),
     "get_product_specs": ("Get_Product_Specs", run_get_product_specs),
+    "create_quote_request": ("Create_Quote_Request", run_create_quote_request),
 }
 
 

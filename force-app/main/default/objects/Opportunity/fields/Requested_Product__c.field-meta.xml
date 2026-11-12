@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Requested_Product__c</fullName>
+    <label>Requested Product</label>
+    <type>Lookup</type>
+    <referenceTo>Product2</referenceTo>
+    <relationshipName>Quote_Requests</relationshipName>
+    <relationshipLabel>Quote Requests</relationshipLabel>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <required>false</required>
+    <inlineHelpText>The product the customer asked a quote for (set by the service agent). No price: sales prepares the quote.</inlineHelpText>
+</CustomField>

@@ -76,7 +76,7 @@
         </connector>
     </assignments>
     <assignments>
-        <description>Takes the first word off the remaining text and remembers it. TRIM in restText skips the empty parts of double spaces.</description>
+        <description>Takes the first word off the remaining text and remembers its stem (plural tolerance, see nextWordStem). TRIM in restText skips the empty parts of double spaces. currentWord is assigned first, while remainingText still holds the word.</description>
         <name>Extract_Word</name>
         <label>Extract Word</label>
         <locationX>0</locationX>
@@ -85,7 +85,7 @@
             <assignToReference>currentWord</assignToReference>
             <operator>Assign</operator>
             <value>
-                <elementReference>nextWord</elementReference>
+                <elementReference>nextWordStem</elementReference>
             </value>
         </assignmentItems>
         <assignmentItems>
@@ -623,7 +623,7 @@
             <label>Yes</label>
         </rules>
     </decisions>
-    <description>Returns the specifications of one active product, found by exact product code or name, or by words in any order (every word must appear in the name, code or search keywords; the keywords hold Dutch/English synonyms and are never returned). When several products match, returns up to 10 names so the customer can choose. Never returns prices or stock. Used by the service agent (UC2).</description>
+    <description>Returns the specifications of one active product, found by exact product code or name, or by words in any order (every word, or its stem without a plural ending, must appear in the name, code or search keywords; the keywords hold Dutch/English synonyms and irregular plurals and are never returned). When several products match, returns up to 10 names so the customer can choose. Never returns prices or stock. Used by the service agent (UC2).</description>
     <ends>
         <name>END_ELEMENT_1</name>
         <locationX>0</locationX>
@@ -677,6 +677,12 @@
         <name>nextWord</name>
         <dataType>String</dataType>
         <expression>IF(CONTAINS({!remainingText}, &quot; &quot;), LEFT({!remainingText}, FIND(&quot; &quot;, {!remainingText}) - 1), {!remainingText})</expression>
+    </formulas>
+    <formulas>
+        <description>Plural tolerance: the first word without a plural ending. 6+ characters ending in &quot;en&quot; or &quot;es&quot; lose those 2 letters (pompen -&gt; pomp, valves -&gt; valv); otherwise 5+ characters ending in &quot;s&quot; lose the s (pumps -&gt; pump). The stem is always at least 4 characters and always a prefix of the word, so matching the stem = matching the word OR its stem; every word must still match. Short words (rvs, DN25, DIS-) are never stemmed. Irregular plurals (kranen, kleppen) are in the search keywords.</description>
+        <name>nextWordStem</name>
+        <dataType>String</dataType>
+        <expression>IF(AND(LEN({!nextWord}) &gt;= 6, OR(RIGHT(LOWER({!nextWord}), 2) = &quot;en&quot;, RIGHT(LOWER({!nextWord}), 2) = &quot;es&quot;)), LEFT({!nextWord}, LEN({!nextWord}) - 2), IF(AND(LEN({!nextWord}) &gt;= 5, RIGHT(LOWER({!nextWord}), 1) = &quot;s&quot;), LEFT({!nextWord}, LEN({!nextWord}) - 1), {!nextWord}))</expression>
     </formulas>
     <formulas>
         <description>The remaining text after the first word, trimmed (so double spaces never produce an empty word).</description>
@@ -776,7 +782,7 @@
     </processMetadataValues>
     <processType>AutoLaunchedFlow</processType>
     <recordLookups>
-        <description>Pre-filter: active products whose name, product code or search keywords contain the longest word. Every word is then checked in Loop Words. Reads only the spec fields plus Search_Keywords__c, which is used for matching only.</description>
+        <description>Pre-filter: active products whose name, product code or search keywords contain the longest word stem (the shorter stem, so plurals are found too). Every word is then checked in Loop Words. Reads only the spec fields plus Search_Keywords__c, which is used for matching only.</description>
         <name>Get_Word_Candidates</name>
         <label>Get Word Candidates</label>
         <locationX>0</locationX>
@@ -932,7 +938,7 @@
         <isOutput>false</isOutput>
     </variables>
     <variables>
-        <description>Internal: the word just taken off the search term.</description>
+        <description>Internal: the stem of the word just taken off the search term.</description>
         <name>currentWord</name>
         <dataType>String</dataType>
         <isCollection>false</isCollection>
@@ -974,7 +980,7 @@
         <objectType>Product2</objectType>
     </variables>
     <variables>
-        <description>Internal: the words of the search term (no empty words).</description>
+        <description>Internal: the stems of the words of the search term (no empty words).</description>
         <name>words</name>
         <dataType>String</dataType>
         <isCollection>true</isCollection>
