@@ -61,6 +61,14 @@ becomes the main demo.
   API tests in `tests/run_flow_tests.py`, screenshots. Commit `469e83c`.
 - **Step 4b (11 Nov):** flow hardened as version 2 (blank-input guard), deployed from Git; v2 active, v1 obsolete.
   Open limitation for Step 5: the customer number must come from the logged-in user, not from the chat.
+- **Step 5 (12 Nov):** Agentforce agent `Delta_Service_Agent` built in the new Agentforce Builder (Agent Script)
+  from the Service Agent template, scoped to Agent Router, Order Inquiries, Escalation, Off Topic, Ambiguous
+  Question; action Get Order Status (our flow); Dutch added to Allowed Languages; Version 1 committed.
+  Agent user needed read-only object access on Account and Order (commit `4e87038`).
+  Retrieved metadata: `AiAuthoringBundle` (Agent Script source), `Bot`/`BotVersion`, `GenAiPlannerBundle`,
+  `AiAgentDefinition`/`AiAgentDefinitionVersion` (generated at Commit Version; generated `.agent` files are base64).
+  6 Preview tests pass. Open for Step 8: static English welcome, Ambiguous Question has no exits,
+  real escalation needs Omni-Channel, identity still from the typed customer number.
 
 ## Timeline
 | Day | Date | Goal |

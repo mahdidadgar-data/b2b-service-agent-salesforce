@@ -9,7 +9,7 @@ evaluation set and monitoring.
 > end to end, following the Forward Deployed Engineer way of working.
 
 ## Status
-🚧 In progress: Step 4 of 9 done.
+🚧 In progress: Step 5 of 9 done.
 
 ## Planned structure
 | Folder | Contents |

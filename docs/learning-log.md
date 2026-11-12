@@ -456,4 +456,236 @@ client's security and architecture reviewers ask for.
 
 ---
 
+## Step 5 (Day 2, 12 Nov 2026): Agentforce agent
+
+### Goal
+Turn the Get Order Status flow into a working conversational agent for UC1: an Agentforce
+Service Agent that understands an order question, collects the customer number and the order
+number, calls the flow, answers in the customer's language, and hands over to a human when the
+request is out of scope. Then get the agent into Git, like the flow and the data model.
+
+### What I did
+1. **Built "Delta Service Agent" (`Delta_Service_Agent`) in the new Agentforce Builder**, which
+   uses **Agent Script**: the whole agent is one readable script (system instructions,
+   settings, subagents, actions and transitions), with a canvas and an editor on top of it.
+2. **Started from the Agentforce Service Agent template and scoped it down** to what the
+   use-case brief allows for this step:
+   - **Kept 5 subagents:** Agent Router (the start node that picks a subagent), Order
+     Inquiries, Escalation, Off Topic and Ambiguous Question.
+   - **Removed 6 subagents and 5 template actions**, including **Cancel Order** (the brief says
+     the agent never changes or cancels orders) and **Get Order By Order Number**, which looks up
+     an order by number alone, without the customer filter that is the whole point of our flow.
+3. **Added our flow as the action Get Order Status** in Order Inquiries
+   (`target: "flow://Get_Order_Status"`):
+   - both inputs (`customerNumber`, `orderNumber`) marked **required**;
+   - **descriptions written as prompts**: the action, every input and every output tell the
+     model what the value means, its format, and what not to do ("Always ask the user for it.
+     Never guess it.");
+   - **loading text** "Checking your order status…", shown while the action runs.
+4. **Wrote the Order Inquiries instructions** as numbered steps: collect both numbers, run the
+   action, answer from `orderFound`, use the action's own not-found message, never suggest the
+   order exists for another customer, and escalate for cancel or change requests.
+
+   ![Order Inquiries in the Agent Script editor](images/agent-order-inquiries-script.png)
+
+5. **Assigned the permission set `Delta_Data_Access` to the agent user**, the dedicated user
+   that the agent's actions run as.
+6. **Added Dutch to Allowed Languages** (Language Settings), next to English.
+7. **Tested in the builder's Preview** (results below) and committed the agent as **Version 1**.
+
+   ![Agent summary: the router and the four subagents](images/agent-summary.png)
+
+8. **Retrieved the agent into Git.** I did not guess which metadata types hold an Agent Script
+   agent. I listed them from the org first:
+   ```powershell
+   sf org list metadata-types --target-org delta-dev
+   sf org list metadata --metadata-type AiAuthoringBundle --target-org delta-dev
+   ```
+   and repeated the second command for each candidate type. Result:
+
+   | Metadata type | Component | What it holds |
+   |---|---|---|
+   | `AiAuthoringBundle` | `Delta_Service_Agent_1` | The **Agent Script source** as edited in the builder (`.agent`), plus a bundle file that points to `Delta_Service_Agent.v1` |
+   | `Bot` (with `BotVersion` `v1`) | `Delta_Service_Agent` | The agent record and its version: agent user, messages, settings |
+   | `GenAiPlannerBundle` | `Delta_Service_Agent_v1` | The planner for version 1: the compiled script, the agent graph and the input/output schema of each action |
+   | `AiAgentDefinition` (+ `AiAgentDefinitionVersion` `#1`) | `Delta_Service_Agent` | The newer agent-definition types, with the same script, graph and schemas |
+   | `GenAiPlugin`, `GenAiFunction` | none | The legacy builder stored topics and actions here. With Agent Script they live inside the script, so these lists are empty |
+
+   The bundle, bot, planner and agent definition were all modified within four seconds of each
+   other (12:59:37–12:59:41), the moment I clicked **Commit Version**. The authoring bundle is
+   the source I edit; the others are what the org generates from it.
+   ```powershell
+   sf project retrieve start --metadata "AiAuthoringBundle:Delta_Service_Agent_1" --metadata "Bot:Delta_Service_Agent" --metadata "GenAiPlannerBundle:Delta_Service_Agent_v1" --metadata "AiAgentDefinition:Delta_Service_Agent" --metadata "AiAgentDefinitionVersion:Delta_Service_Agent#1" --target-org delta-dev
+   ```
+   This added 15 files under `force-app/main/default/` (`aiAuthoringBundles/`, `bots/`,
+   `genAiPlannerBundles/`, `aiAgents/`, `aiAgentDefinitionVersions/`).
+9. **Checked the retrieved files for secrets before committing.** No tokens, session IDs,
+   passwords, org URL or personal email. One catch: the generated `.agent` and graph files are
+   **base64-encoded**, so a plain-text search cannot see inside them. I decoded every base64
+   block and scanned the decoded text as well. It is clean, and the decoded script is identical
+   to the authoring script. The only org-specific value is the agent user's username
+   (`delta_service_agent@00d….ext`, which contains the org ID). It is not a secret, and the
+   metadata needs it to deploy.
+
+### Why the new builder (Agent Script)
+- **Legacy agents are on their way out.** Agents built in the legacy builder (on GPT-4o) are
+  deprecated. A new agent should not start on a platform that is already being retired.
+- **The model is not permanent either.** The model behind the new builder is also on a
+  retirement path. Every model change can change routing and answers without a single line of
+  my configuration changing. The protection against that is not the builder, it is the **test
+  set** (Step 8): run the same questions before and after a model change and compare.
+- **Agent Script is reviewable.** One script holds the instructions, the routing and the action
+  contracts, so a change shows up as a readable diff in Git, like the flow XML in Step 4.
+
+### Preview test results
+Run in the builder's Preview, with the trace open for every message.
+
+| # | Test | Input | Expected | Result |
+|---|---|---|---|---|
+| 1 | Own order | `C-1004` + `SO-10447` | Delayed, 18 Nov 2026 (per `orders.json`) | ✅ Delayed, 18 Nov 2026, correct |
+| 2 | Guardrail: other company's order | `C-1001` + `SO-10447` | Not found, no details | ✅ Standard not-found message, nothing about the order leaked |
+| 3 | Missing customer number | Order number only | Agent asks for the customer number | ✅ Agent asked for the customer number |
+| 4 | Cancel request | A request to cancel an order | No cancellation, hand-over | ✅ Routed to Escalation, nothing cancelled (there is no cancel action) |
+| 5 | Dutch, then a human | `C-1011` + `SO-10462` in Dutch, then "ik wil een medewerker" | Answer in Dutch (per `orders.json`: Shipped, DB Schenker, with tracking number), then escalate | ✅ Correct answer in Dutch, then `escalate_to_human` |
+| 6 | Off topic | A general-knowledge question | Politely declined | ✅ Declined and redirected to order questions |
+
+![Preview of the guardrail test with the trace summary](images/agent-preview-guardrail.png)
+
+### What I learned
+- **A template is a starting point, not a design.** The Service Agent template brings many
+  subagents, actions and hidden conditions. Scoping it down to the brief is a security task:
+  every action left in is something the model can call. Cancel Order and an unfiltered order
+  lookup had to go.
+- **Descriptions are prompts.** The model chooses actions and fills inputs from the names and
+  descriptions only. "Required" plus "Always ask the user for it. Never guess it." is what made
+  test 3 pass.
+- **The router decides with the transitions it can see.** A subagent is only reachable through a
+  transition action, and a condition on that transition can hide it completely.
+- **Two places called `actions:`.** In Agent Script, `reasoning.actions` lists the tools the
+  model may use in that subagent (including transitions). The subagent-level `actions` block
+  *defines* actions (target, inputs, outputs). Mixing them up breaks the script.
+- **The trace is the debugger.** It shows every step: input, transition, reasoning, action,
+  output evaluation (for example `GROUNDED`). Each bug below was found by reading the trace, not
+  by rewording prompts at random.
+- **Test as the runtime user.** Admin tests prove the logic. Only a test as the agent user proves
+  the permissions.
+- **Guardrails stay in the action.** Removing the template's verification condition did not
+  weaken security, because the customer filter lives in the flow (Step 4), not in the
+  conversation.
+- **Generated metadata can hide content.** Base64 blocks in retrieved files must be decoded
+  before a secret scan means anything.
+
+### Problems I hit and how I solved them
+
+**1. Order question routed to Off Topic.**
+- *Symptom:* an order-status question got the Off Topic redirect.
+- *Trace:* the Agent Router transitioned to Off Topic; the transition to Order Inquiries was not
+  available to it.
+- *Root cause:* a leftover template condition on the transition, `available when
+  @variables.isVerified == True`. The template expects an e-mail verification step that sets
+  `isVerified`. I had removed that step, so `isVerified` stayed `False` and the router could
+  never see Order Inquiries.
+- *Fix:* removed the condition. The guardrail is not lost: the flow only returns orders of the
+  given customer.
+- *Lesson:* when you remove part of a template, look for everything that depended on it.
+
+**2. The action ran, but the flow failed with `INVALID_TYPE`.**
+- *Symptom:* the agent could not give the order status.
+- *Trace:* the Get Order Status action was called with the right inputs, and the flow returned
+  `INVALID_TYPE`.
+- *Root cause:* `Delta_Data_Access` had only field permissions, no object permissions. The agent
+  user could not read Account or Order at all, so the flow's lookups failed. My flow tests in
+  Step 4 passed because they ran as the admin, who has access to everything.
+- *Fix:* read-only object access on Account and Order (create, edit, delete, View All and
+  Modify All all false), deployed from Git and verified with a query on `ObjectPermissions`
+  (commit `4e87038`). Case, Opportunity and Product2 follow in Step 6 when an action needs them.
+- *Lesson:* test as the runtime user, and grant the least privilege that makes the test pass.
+
+**3. "Connect me with a human" stayed in Off Topic.**
+- *Symptom:* once the conversation was in Off Topic, "connect me with a human" got another Off
+  Topic redirect instead of a hand-over.
+- *Trace:* the message stayed in Off Topic, and no transition was called.
+- *Root cause:* the template's Off Topic subagent has no actions, so once the conversation is
+  there it has no way out.
+- *Considered:* the setting **Reset to Initial Node**. It resets per session, not per message,
+  so it would not have helped.
+- *Fix:* explicit transitions. Off Topic got `go_to_escalation` and `go_to_OrderInquiries`, and
+  Order Inquiries got `go_to_escalation` (for "talk to a human", cancel and change requests).
+  My first attempt put the transition line in the subagent's action-definition block instead
+  of `reasoning.actions`, and the Problems panel showed 28 problems. I moved it before saving.
+- *Lesson:* design the exits of every subagent, not only the entrances, and read the Problems
+  panel before saving.
+
+**4. A Dutch question got an English answer.**
+- *Symptom:* a question in Dutch got an answer in English.
+- *Trace:* routing and the action were correct; only the response language was wrong. So it was
+  configuration, not reasoning.
+- *Root cause:* only English was in Allowed Languages, so the instruction "answer in the
+  customer's language" could not take effect.
+- *Fix:* added Dutch to Allowed Languages. I did not use the beta Adaptive Language Mode: a
+  fixed list of languages is predictable and testable, and a client would not want a beta
+  feature in production.
+- *Lesson:* some behaviour is set by configuration, not by the prompt. Check settings before
+  rewriting instructions.
+
+| Problem | Cause | Solution |
+|---|---|---|
+| Order question went to Off Topic | Leftover `available when @variables.isVerified == True` on the transition | Removed the condition; guardrail stays in the flow |
+| Flow failed with `INVALID_TYPE` | Permission set had no object permissions; tests ran as admin | Read-only object access on Account and Order (`4e87038`) |
+| Stuck in Off Topic | Off Topic had no transitions out | `go_to_escalation` / `go_to_OrderInquiries` in Off Topic, `go_to_escalation` in Order Inquiries |
+| English answer to a Dutch question | Dutch not in Allowed Languages | Added Dutch (not the beta Adaptive Language Mode) |
+
+### Open items for Step 8
+| Item | Detail |
+|---|---|
+| Welcome message is static English | Dutch customers are greeted in English. Options: a bilingual welcome, or a welcome based on `EndUserLanguage` once a real channel is connected |
+| Ambiguous Question has no exits | Like Off Topic before the fix, it has no transitions, so a conversation can get stuck there |
+| Escalation goes nowhere real | `escalate_to_human` works in Preview, but real routing to a human needs Omni-Channel and a messaging channel, which this Developer org does not have set up |
+| Identity comes from the chat | The customer number is typed by the user. The flow guarantees one customer never sees another's orders *for that number*, but anyone who knows a customer number and an order number can ask. In production the customer must come from the logged-in portal user (User → Contact → Account), never from the conversation |
+
+### Link to the FDE role
+This step is the core of FDE work: take a vendor template, cut it down to the client's use case,
+connect it to the client's own business logic, and prove it works with the client's real users
+and permissions. Most of the time went into debugging routing, permissions and configuration,
+not into writing prompts. Reading the trace and finding the root cause is what an FDE does on
+site when an agent "does something strange" in front of the client.
+
+### Possible interview questions
+- *How did you build the agent, and why did you start from a template?*
+  From the Agentforce Service Agent template, because it brings tested routing, escalation and
+  off-topic handling. Then I removed everything outside the brief, including Cancel Order and an
+  order lookup without a customer filter, because every action left in is something the model
+  can call.
+- *Your agent called the action, but it failed. How did you find out why?*
+  The trace showed the action ran with the right inputs and the flow returned `INVALID_TYPE`. The
+  agent user had field permissions but no object read on Account and Order. My tests had passed
+  because they ran as admin. Fixed with least-privilege read access, and the lesson is to test
+  as the runtime user.
+- *How do you stop the agent from showing one customer another customer's order?*
+  In the action, not in the prompt: the flow filters the order by the customer's account and
+  returns the same not-found message for every failure. Test 2 in Preview confirms that nothing
+  leaks. The remaining gap is identity: in production the customer must come from the logged-in
+  user, not from the chat.
+- *The model behind Agentforce will change. How do you protect the client?*
+  With a regression test set: the same questions, expected outcomes and guardrail cases, run
+  before and after every model or configuration change. That is Step 8. The builder or the
+  prompt does not protect you; measurement does.
+- *What is the difference between a topic or subagent and an action?*
+  A subagent is a job with its own instructions (Order Inquiries). An action is a tool it can
+  call (the flow) or a transition to another subagent. The router only sees the transitions it
+  is given, so routing problems are often missing or blocked transitions.
+- *A customer asks for a human and the agent ignores it. What do you check?*
+  The trace: which subagent the conversation is in, and whether that subagent has a transition
+  to Escalation. In my case Off Topic had none, so I added explicit transitions. In production
+  you also need Omni-Channel behind `escalate_to_human`.
+- *How do you keep an agent built in a UI under version control?*
+  List the metadata types in the org instead of guessing, retrieve them with the CLI, check the
+  files for secrets (including base64 content) and commit. For Agent Script the authoring bundle
+  is the source; the bot and planner metadata are generated from it.
+- *Why didn't you use the beta Adaptive Language Mode?*
+  A fixed list of allowed languages is predictable and can be tested. Beta features change
+  without notice, which is not what a client wants in production.
+
+---
+
 <!-- Next steps are added as the project continues. -->
