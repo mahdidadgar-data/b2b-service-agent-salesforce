@@ -775,7 +775,7 @@ Case **object** access (read, create) already came from the platform permission 
 permission set states everything the agent relies on.
 
 ### API test results
-`python tests/run_flow_tests.py --org delta-dev`: **12 passed, 0 failed.**
+`python tests/run_flow_tests.py --org delta-dev`: **13 passed, 0 failed** (test g added in the wrap-up).
 
 | Suite | Test | Result |
 |---|---|---|
@@ -786,6 +786,7 @@ permission set states everything the agent relies on.
 | | d) `C-1004`, no order number | ✅ Case created on the account, not linked to an order, Subject without an order number |
 | | e) complaint is whitespace only | ✅ Missing-input message, 0 new cases |
 | | f) `C-9999`, no order number | ✅ Customer-not-found message, 0 new cases |
+| | g) `C-9999` + `SO-10447`: unknown customer with an order number | ✅ Exactly the Get Order Status not-found message, 0 new cases (no leak about which number was wrong) |
 | | Cleanup | ✅ Deleted the 2 cases this run created, by Id, and confirmed they are gone |
 
 How the complaint suite proves its results:
@@ -870,10 +871,97 @@ How the complaint suite proves its results:
 | `Case.AccountId` read-only for the agent | Einstein Agent User profile | Read + edit in `Delta_Agent_Access` |
 | Too few assignments in a query | `ORDER BY PermissionSet.Name` drops rows | Verified with the original query and the Setup Audit Trail; no org change |
 
+### Agent side: Complaints subagent (Version 2)
+
+#### What I built
+1. **A new subagent, Complaints.** Its description says what it is for *and what not*, because
+   the router chooses subagents from their descriptions: "Registers a complaint as a case for a
+   human colleague: damaged, wrong, missing or incomplete deliveries, defective products, or a
+   customer who is unhappy and wants to file a complaint. **Not for simple questions about where
+   an order is or when it arrives.**"
+2. **The Create Complaint Case action** (`target: "flow://Create_Complaint_Case"`):
+   - `customerNumber` and `complaintSummary` required, `orderNumber` optional;
+   - **Require user confirmation: on.** The platform asks the customer to confirm before the
+     action runs, because this action writes data;
+   - loading text "Registering your complaint…".
+3. **Instructions with one firm business rule:** "Never promise a refund, replacement, credit or
+   compensation." Those are commercial decisions for a human colleague; a promise from the agent
+   would create an expectation the business never agreed to.
+4. **Transitions in and out:**
+
+   | From | To | Why |
+   |---|---|---|
+   | Complaints | Escalation | Customer asks for a human |
+   | Complaints | Order Inquiries | Customer only asks about status or delivery date |
+   | Order Inquiries | Complaints | A status question turns into a complaint (for example about a delay) |
+   | Off Topic | Complaints | A complaint that first landed in Off Topic |
+   | Agent Router | Complaints | Added automatically by the builder when the subagent was created |
+
+   This applies the Step 5 lesson: design the exits of every subagent, not only the entrances.
+5. **Committed as agent Version 2 and retrieved it into Git**, the same way as Step 5: listed
+   the metadata first, then retrieved the Version 2 components.
+
+   | Metadata type | Version 2 component |
+   |---|---|
+   | `AiAuthoringBundle` | `Delta_Service_Agent_2` (Agent Script source) |
+   | `Bot` / `BotVersion` | `Delta_Service_Agent` / `v2` |
+   | `GenAiPlannerBundle` | `Delta_Service_Agent_v2` |
+   | `AiAgentDefinition` / `AiAgentDefinitionVersion` | `Delta_Service_Agent` / `Delta_Service_Agent#2` |
+
+   - **What the retrieve added:** 17 new files.
+   - **Version 1 stays in Git** next to Version 2, as it does in the org.
+   - **The single components are unchanged:** `Bot` and `AiAgentDefinition` were reported as
+     "Changed" but had no content difference in Git.
+   - **Secret scan:** 32 files and 8 decoded base64 blocks, with no tokens, session IDs or
+     personal data. The only username is the agent user's, as in Step 5. The decoded Version 2
+     script is identical to the authoring script.
+
+#### Problem: the customer had to confirm twice
+- *Symptom:* before registering a complaint, the agent first asked the customer to confirm in
+  its own words, and after "yes" the platform asked for confirmation again.
+- *Root cause:* two controls for the same thing. My instructions told the agent to confirm,
+  and the action's **Require user confirmation** setting also asks.
+- *Fix:* kept the platform confirmation as the **hard gate**: the action cannot run without it,
+  whatever the model decides. I changed the instruction to "Do not ask for confirmation yourself:
+  the system shows the customer a confirmation before the case is created."
+- *Lesson:* a platform setting is a hard gate; an instruction is a soft request the model may
+  or may not follow. Put a safety control where it cannot be skipped, and don't show the
+  customer the same control twice.
+
+#### Preview test results (as the agent user)
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Own complaint: `C-1011`, pumps in `SO-10462` arrived damaged | ✅ One confirmation, then case **00001034** created |
+| 2 | The same complaint again | ✅ One confirmation, then "There is already an open complaint for order SO-10462: case number 00001034", and no second case |
+| 3 | `C-1001` complains about `SO-10462` (C-1011's order) | ✅ Not-found message; **no hint that a complaint exists**, because the flow checks ownership *before* the duplicate check |
+| 4 | Status of `SO-10474` (`C-1005`), then "I want to file a complaint about it" | ✅ Order Inquiries → Complaints, with the customer number and order number carried over (not asked again); case **00001035** |
+
+![Duplicate protection in Preview](images/agent-complaint-duplicate-protection.png)
+
+![Hand-over from Order Inquiries to Complaints with context](images/agent-order-to-complaint-handoff.png)
+
+**Proof that the agent's permissions were used.** I queried both Preview cases before deleting
+them. Their **CreatedBy is the agent user** (`delta_service_agent@…`), with `Created_By_Agent__c =
+Agentforce`. So the case was created under the agent's own permissions (`Delta_Agent_Access`,
+including the `Case.AccountId` edit right from problem 3), not under my admin rights. This closes
+the gap the admin-run API tests leave open.
+
+**Cleanup.** I deleted the two Preview cases (00001034 and 00001035) only after checking that
+both had `Created_By_Agent__c = Agentforce` and were created by the agent user today. Only the 4
+original demo cases remain.
+
+**Observation (UX, for Step 8).** The platform confirmation says "I'm going to create a
+complaint case…" *before* the action runs, so before the flow checks ownership. In test 3 the
+customer is first told that a case will be created and then gets the not-found message. It
+leaks nothing (the message is the standard one), but the customer is promised something that
+then does not happen.
+
 ### Open items
 | Item | Detail |
 |---|---|
-| **Preview test as the agent user** | The API tests run as admin. They prove the logic, not the agent's access. Next: add the action to the agent (a complaints subagent) and test a complaint in Agentforce Preview |
+| ~~Preview test as the agent user~~ | **Done** (agent Version 2): 4 Preview tests pass, and CreatedBy on the Preview cases is the agent user |
+| Confirmation text before the ownership check | The platform confirmation promises a case before the flow has checked the order. Options for Step 8: neutral confirmation wording, or a read-only ownership check before asking for confirmation |
 | Fault path not tested | An admin API call can't make the insert fail. The fault path is checked by review only. If the read-back fails after a successful insert, the flow reports a failure although the case exists (rare, but possible) |
 | Customer numbers can be probed | Without an order number, the message confirms whether a customer number exists (a review decision for clarity). Production fix: identity from the logged-in portal user, as in Step 5 |
 | Account-only complaints have no duplicate check | Duplicate protection works per order. Two complaints without an order number create two cases |
@@ -914,6 +1002,17 @@ habits that prevent that:
   Verify it before acting: re-run the query in its original form, and check the Setup Audit
   Trail. In my case, an `ORDER BY` on a relationship field returned fewer rows; nothing had
   changed in the org.
+- *Why use the platform's "Require user confirmation" instead of telling the agent to confirm?*
+  The setting is a hard gate: the action cannot run without the customer's "yes", whatever the
+  model decides. An instruction is a soft request. Using both made the customer confirm twice,
+  so I kept the hard gate and removed the confirmation from the instructions.
+- *How do you prove that an agent action ran with the agent's permissions and not yours?*
+  Look at the records it created: CreatedBy on the Preview cases is the agent user. Together with
+  the field-level security check, that shows the agent user really has the access the flow needs.
+- *Why does the flow check ownership before checking for duplicates?*
+  Otherwise another company could ask about an order that isn't theirs and get "there is
+  already an open complaint for this order", which reveals information about someone else's
+  order. Checking ownership first means a stranger only ever sees the standard not-found message.
 
 ---
 

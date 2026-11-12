@@ -22,6 +22,7 @@ Suite 2: Create_Complaint_Case (UC4: complaint -> Case)
     d) customer only, no order    -> case created on the account, not linked to an order
     e) blank complaint            -> no case, the missing-input message
     f) unknown customer, no order -> no case, the customer-not-found message
+    g) unknown customer + order   -> no case, exactly the Get_Order_Status not-found message (no leak)
   Each test also counts the agent's cases in the org before and after the call, so it proves
   how many cases the call really created. This suite writes data: afterwards it deletes the
   cases it created (only those, by Id), even if a test failed.
@@ -222,6 +223,8 @@ CCC_TESTS = [
     ("e", "e_blank_summary.json", "e) blank complaint (whitespace only) -> refused", 0, check_missing_input),
     ("f", "f_unknown_customer_no_order.json", "f) C-9999, no order number -> customer not found", 0,
      check_customer_not_found),
+    ("g", "g_unknown_customer_with_order.json", "g) C-9999 + SO-10447 -> not found, identical message", 0,
+     check_not_found),
 ]
 
 

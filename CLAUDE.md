@@ -74,7 +74,12 @@ becomes the main demo.
   per role: `Delta_Data_Access` = humans/admin (unchanged), `Delta_Agent_Access` = agent user only (read Account/
   Order, read+create Case, Case.AccountId/Related_Order__c/Created_By_Agent__c editable). Assignment script
   `scripts/setup-agent-permissions.ps1`. Tests: 12/12 pass, complaint suite cleans up its own cases.
-  Do not use `ORDER BY PermissionSet.Name` on PermissionSetAssignment (drops rows). Open: Preview test as agent user.
+  Do not use `ORDER BY PermissionSet.Name` on PermissionSetAssignment (drops rows).
+- **Step 6a wrap-up (12 Nov):** agent **Version 2** committed and retrieved (`*_2` / `_v2` / `#2` components):
+  Complaints subagent + Create Complaint Case action (require user confirmation ON, orderNumber optional),
+  transitions Complaints↔Escalation/Order Inquiries, Off Topic→Complaints. 4 Preview tests pass; Preview cases
+  had CreatedBy = agent user (proof of agent permissions), then deleted. API tests 13/13 (test g added).
+  Open for Step 8: platform confirmation text promises a case before the ownership check.
 
 ## Timeline
 | Day | Date | Goal |
