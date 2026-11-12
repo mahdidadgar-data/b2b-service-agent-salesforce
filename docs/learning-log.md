@@ -578,9 +578,8 @@ Run in the builder's Preview, with the trace open for every message.
 ### Problems I hit and how I solved them
 
 **1. Order question routed to Off Topic.**
-- *Symptom:* an order-status question got the Off Topic redirect.
-- *Trace:* the Agent Router transitioned to Off Topic; the transition to Order Inquiries was not
-  available to it.
+- *Symptom:* "Hi, where is my order SO-10447?" got a polite answer asking for the customer number, but after I sent "C-1004" the agent replied "How can I help you with your order or delivery questions today?" and never looked anything up.
+- *Trace:* Transition to Subagent: off topic, Output Evaluation: SMALL_TALK. The trace summary said the agent "routed to its off_topic subagent and, without calling any actions, asked the user to provide their customer number".
 - *Root cause:* a leftover template condition on the transition, `available when
   @variables.isVerified == True`. The template expects an e-mail verification step that sets
   `isVerified`. I had removed that step, so `isVerified` stayed `False` and the router could
@@ -602,9 +601,8 @@ Run in the builder's Preview, with the trace open for every message.
 - *Lesson:* test as the runtime user, and grant the least privilege that makes the test pass.
 
 **3. "Connect me with a human" stayed in Off Topic.**
-- *Symptom:* once the conversation was in Off Topic, "connect me with a human" got another Off
-  Topic redirect instead of a hand-over.
-- *Trace:* the message stayed in Off Topic, and no transition was called.
+- *Symptom:* "Please cancel my order SO-10447" was routed to Off Topic (safe: nothing was cancelled, and the agent offered a human colleague). But when I answered "Yes, please connect me with a human colleague", the agent again only offered help with order status.
+- *Trace:* the second message showed Reasoning: Off Topic, Output Evaluation: SMALL_TALK, and no transition at all.
 - *Root cause:* the template's Off Topic subagent has no actions, so once the conversation is
   there it has no way out.
 - *Considered:* the setting **Reset to Initial Node**. It resets per session, not per message,
