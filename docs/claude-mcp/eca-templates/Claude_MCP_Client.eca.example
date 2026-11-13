@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  REDACTED TEMPLATE, not deployable as is. Retrieved from delta-dev on 13 Nov 2026
+  (ExternalClientApplication:Claude_MCP_Client). Kept out of force-app because it contains
+  the admin's contact email and the org ID. See docs/claude-mcp/setup.md.
+-->
+<ExternalClientApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <contactEmail><CONTACT_EMAIL></contactEmail>
+    <description>OAuth client for Claude (Desktop / Claude Code) to reach the Delta Service Tools hosted MCP server. Scopes: mcp_api and refresh only (no REST API). PKCE required. Only admin-approved users with the Delta MCP Base permission set.</description>
+    <distributionState>Local</distributionState>
+    <isProtected>false</isProtected>
+    <label>Claude MCP Client</label>
+    <orgScopedExternalApp><ORG_ID>:Claude_MCP_Client</orgScopedExternalApp>
+</ExternalClientApplication>

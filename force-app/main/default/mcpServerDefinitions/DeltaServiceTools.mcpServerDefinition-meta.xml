@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<McpServerDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Read-only customer service tools for Delta Industrial Supplies: order status (filtered by customer number) and product specifications. No prices, no stock, no write actions. Same flows as the Agentforce Delta Service Agent.</description>
+    <masterLabel>Delta Service Tools</masterLabel>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>fa:flow-Get_Product_Specs</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>Get_Product_Specs</operation>
+        </apiDefinition>
+        <descriptionOverride>Returns the technical specifications of one active Delta product: name, code, category, max pressure (bar), min/max temperature (°C), connection size, material and datasheet text. Search by product code (e.g. DP-200), by name, or by words in any order; Dutch and English product types work (e.g. kogelafsluiter, ball valve, circulatiepomp). Call it again for every new product question, even if an earlier search found nothing. If productFound is false and matchingProducts is filled, ask the customer which of those products they mean; never pick one yourself. Empty values mean not applicable: never fill them in. Use only the returned values and datasheet text: never estimate, convert or extrapolate. No prices or stock. Read-only.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>get_product_specs</toolName>
+        <toolTitle>Get_Product_Specs</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>fa:flow-Get_Order_Status</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>Get_Order_Status</operation>
+        </apiDefinition>
+        <descriptionOverride>Returns the delivery status of one order (status, expected delivery date, carrier, tracking number, delay reason), only if the order belongs to the given customer number. Both inputs are required: always ask the customer for their customer number (e.g. C-1001) and order number (e.g. SO-10447); never guess them. If orderFound is false, tell the customer that no order was found for that combination; do not speculate whether the order exists. Read-only.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>get_order_status</toolName>
+        <toolTitle>Get_Order_Status</toolTitle>
+    </tools>
+</McpServerDefinition>

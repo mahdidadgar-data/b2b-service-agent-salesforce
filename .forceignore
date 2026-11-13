@@ -3,3 +3,8 @@
 **/jsconfig.json
 **/__tests__/**
 **/.gitkeep
+
+# External Client App: files with a consumer key, contact email or org IDs (see docs/claude-mcp/eca-templates/)
+**/externalClientApps/**
+**/extlClntAppGlobalOauthSets/**
+**/extlClntAppOauthSettings/**

@@ -96,6 +96,19 @@ becomes the main demo.
   `Get_Product_Specs` v4: plural tolerance (stem rule) + irregular Dutch plurals as keywords (21 products).
   Agent **Version 4** committed in the builder (not activated) and retrieved: Quote Request subagent. API tests
   54/54; Preview tests 1–6 (QR-0003 and QR-0007 on C-1011 are Preview evidence: leave them alone).
+- **Step 7 (13 Nov):** Claude via a custom **Salesforce Hosted MCP server** `DeltaServiceTools` (active; 2 read-only
+  + idempotent tools = flows `Get_Order_Status`, `Get_Product_Specs`; all 15 standard servers inactive). Dedicated
+  user "Delta MCP User" (Salesforce licence, Minimum Access - Salesforce; username not in Git) with `Delta_MCP_Base`
+  (API Enabled + Run Flows only) and `Delta_MCP_Data_Read` (Read on Account/Order/Product2, 16 read-only fields
+  incl. `Order.Name` and `Product2.ProductCode`). External Client App `Claude_MCP_Client`: scopes `mcp_api` + refresh
+  only, PKCE, no secret, rotation, 30-day TTL, admin-approved + `Delta_MCP_Base` only. claude.ai custom connector +
+  Project "Delta Service Agent (Claude)". In Git: MCP server + 3 ECA policy files; 3 ECA files (consumer key,
+  contact email, org IDs) are templates in `docs/claude-mcp/eca-templates/` and excluded in `.forceignore`/`.gitignore`.
+  Docs: `docs/claude-mcp/setup.md`, `project-instructions.md`. Tests 1–8 + 7b as expected: base set only →
+  `INVALID_TYPE` (proves the flows run as the MCP user), same answers as Agentforce, no leak; without instructions
+  Claude suggested the general Salesforce connector (test 4), with Project instructions it refused. Key lessons:
+  guardrails in the flows serve both agents; no write tools over MCP (client approval can be skipped in Auto mode);
+  fix one model before evaluating (Opus 4.8 vs 5.5 changed behaviour). Next: Step 8.
 
 ## Timeline
 | Day | Date | Goal |

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  REDACTED TEMPLATE, not deployable as is. Retrieved from delta-dev on 13 Nov 2026
+  (ExtlClntAppOauthSettings:Claude_MCP_Client_oauth). Contains no secret, but oauthLink holds
+  the org ID and an internal record ID, so it only fits this one org.
+  The scopes line is the important part: RefreshToken + MCP only, no api/full.
+-->
+<ExtlClntAppOauthSettings xmlns="http://soap.sforce.com/2006/04/metadata">
+    <commaSeparatedOauthScopes>RefreshToken, MCP</commaSeparatedOauthScopes>
+    <externalClientApplication>Claude_MCP_Client</externalClientApplication>
+    <isFirstPartyAppEnabled>false</isFirstPartyAppEnabled>
+    <label>Claude_MCP_Client_oauth</label>
+    <oauthLink><ORG_ID>:<OAUTH_LINK_ID></oauthLink>
+</ExtlClntAppOauthSettings>

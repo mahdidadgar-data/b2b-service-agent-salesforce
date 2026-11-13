@@ -21,5 +21,11 @@ desktop.ini
 .localdevserver/
 deploy-options.json
 
+# External Client App: files with a consumer key, contact email or org IDs.
+# Second line of defence next to .forceignore; redacted templates live in docs/claude-mcp/eca-templates/
+**/externalClientApps/
+**/extlClntAppGlobalOauthSets/
+**/extlClntAppOauthSettings/
+
 # Claude Code personal settings (local permissions, not for the repo)
 .claude/settings.local.json
