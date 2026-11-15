@@ -27,5 +27,8 @@ deploy-options.json
 **/extlClntAppGlobalOauthSets/
 **/extlClntAppOauthSettings/
 
+# Evaluation runs: raw CLI output and traces (may contain record IDs and user names); the results CSVs are kept
+evals/results/raw/
+
 # Claude Code personal settings (local permissions, not for the repo)
 .claude/settings.local.json

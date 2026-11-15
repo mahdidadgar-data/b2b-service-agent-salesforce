@@ -1,0 +1,21 @@
+{
+  "required" : [ "customerNumber", "orderNumber" ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "customerNumber" : {
+      "title" : "customerNumber",
+      "description" : "The customer number of the company asking, format C-1234 (for example C-1001). Always ask the user for it. Never guess it, and never reuse a customer number from earlier in the conversation for a different company.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "orderNumber" : {
+      "title" : "orderNumber",
+      "description" : "The order number, format SO-12345. Always ask the user for it. Never guess it.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

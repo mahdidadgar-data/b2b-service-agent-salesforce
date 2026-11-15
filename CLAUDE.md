@@ -109,6 +109,14 @@ becomes the main demo.
   Claude suggested the general Salesforce connector (test 4), with Project instructions it refused. Key lessons:
   guardrails in the flows serve both agents; no write tools over MCP (client approval can be skipped in Auto mode);
   fix one model before evaluating (Opus 4.8 vs 5.5 changed behaviour). Next: Step 8.
+- **Step 8 (13–15 Nov):** evaluation in `evals/`: `eval-set.csv` (52 tests, tags ACC/LEAK/HAND, criteria from the
+  brief), runner `evals/agentforce/run_preview.py` (CLI preview on an authoring bundle, live actions, fresh session
+  per test, write guard, `--reparse`; raw output in gitignored `evals/results/raw/`). Results: v4 ACC 24/26, LEAK
+  10/10, HAND 5/7 (O-07, P-09, D-04, E-02 failed) → agent **Version 5** (committed in the builder, **Inactive**;
+  bundle `Delta_Service_Agent_5` = repo file, SHA-256 verified) passes all 51 (43 automated + 8 manual write/hand-off
+  tests); Claude Opus 5.5 45/45. **v5 is the new baseline.** CLI preview needs the bundle's BotVersion in the org; the
+  CLI publishes only draft (unversioned) bundles, so new versions go through the builder. The CLI preview trace
+  doesn't show the running user: write tests stay manual in the builder Preview (records checked, deleted by Id).
 
 ## Timeline
 | Day | Date | Goal |

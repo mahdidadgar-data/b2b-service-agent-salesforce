@@ -1,0 +1,110 @@
+{
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "category" : {
+      "title" : "category",
+      "description" : "Product category: Pumps, Valves, Fittings, Insulation or Fixings.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "connectionSize" : {
+      "title" : "connectionSize",
+      "description" : "Connection size, for example DN25 / 1 inch.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "datasheetText" : {
+      "title" : "datasheetText",
+      "description" : "Datasheet text of the product: the only source for detailed technical answers.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "matchCount" : {
+      "title" : "matchCount",
+      "description" : "Number of matching products: 1 when one product was found, more when the customer must choose.",
+      "lightning:type" : "lightning__numberType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "matchingProducts" : {
+      "title" : "matchingProducts",
+      "description" : "When several products match: up to 10 product names, separated by \"; \".",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "material" : {
+      "title" : "material",
+      "description" : "Material of the product.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "maxPressureBar" : {
+      "title" : "maxPressureBar",
+      "description" : "Maximum pressure in bar, as text. Empty when not applicable (for example insulation).",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "maxTemperatureC" : {
+      "title" : "maxTemperatureC",
+      "description" : "Maximum temperature in °C, as text.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "message" : {
+      "title" : "message",
+      "description" : "Short message for the customer when no single product was found.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "minTemperatureC" : {
+      "title" : "minTemperatureC",
+      "description" : "Minimum temperature in °C, as text.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "productCode" : {
+      "title" : "productCode",
+      "description" : "Product code, for example DIS-PMP-DP-200.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "productFound" : {
+      "title" : "productFound",
+      "description" : "True only if exactly one active product matches.",
+      "lightning:type" : "lightning__booleanType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    },
+    "productName" : {
+      "title" : "productName",
+      "description" : "Product name.",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isDisplayable" : false,
+      "copilotAction:isUsedByPlanner" : true
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}
