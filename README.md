@@ -258,4 +258,4 @@ PowerShell
 
 ## Author
 
-Mahdi Dadgar. Built as preparation for an Agentforce Forward Deployed Engineer role.
+Mahdi Dadgar
