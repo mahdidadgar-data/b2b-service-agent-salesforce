@@ -10,7 +10,7 @@ and as **Claude** connected through a **Salesforce Hosted MCP server**. Then I m
 agents against criteria agreed before the first test run.
 
 > Learning and portfolio project (11–15 November 2026), built to learn the Salesforce, Agentforce
-> and Claude stack end to end the way a Forward Deployed Engineer works: business problem first,
+> and Claude stack end to end, the way an AI agent is delivered for a client: business problem first,
 > then data, actions, agent, guardrails and evaluation. The company, customers and data are
 > fictional.
 

@@ -1,8 +1,8 @@
 # Learning Log: B2B Service Agent on Salesforce
 
 This log records every step of the project: what I did, what I learned, the problems I hit
-and how I solved them, and how each step connects to the Forward Deployed Engineer (FDE)
-role. At the end it becomes a printable PDF with interview questions.
+and how I solved them, and how each step connects to delivering AI agents for clients. At the end
+it becomes a printable PDF with review questions.
 
 ---
 
@@ -67,12 +67,12 @@ tools on my computer, and a Git repository that holds the Salesforce configurati
 | Browser showed "localhost refused to connect" | The CLI command had timed out, so nothing was listening for the login code | Ran the login command again and finished it within the time window |
 | Git warning "LF will be replaced by CRLF" | Windows and Linux end lines differently | Normal on Windows. Git handles it automatically |
 
-### Link to the FDE role
-An FDE starts every engagement by setting up a safe, reproducible environment: access to the
+### Link to client work
+An engineer starts every engagement by setting up a safe, reproducible environment: access to the
 client's org, source control, and a clean way to deploy. Secrets are protected from the first
 commit. This step is that foundation.
 
-### Possible interview questions
+### Review questions
 - *Why keep Salesforce configuration in Git instead of only configuring in Setup?*
 - *How do you make sure credentials and tokens never end up in a repository?*
 - *What is a Salesforce org, and why would you work in a sandbox or developer org first?*
@@ -96,8 +96,8 @@ success is measured, before building anything.
    - **Standard Salesforce `Order` object** instead of a custom object.
 
 ### What I learned
-- **An FDE starts with the business problem, not the technology.** The brief is the first
-  deliverable an FDE agrees with the client.
+- **An engineer starts with the business problem, not the technology.** The brief is the first
+  deliverable an engineer agrees with the client.
 - **Choose use cases by volume and feasibility.** Order status is 35% of contacts and fully
   answerable from data, so it's the best first use case.
 - **Three levels of agent work:**
@@ -115,15 +115,15 @@ success is measured, before building anything.
 - **Standard vs custom objects:** Salesforce best practice is to use standard objects (Account,
   Order, Case, Opportunity) before creating custom ones. Standard objects bring built-in features,
   reports and integrations, and clients already know them.
-- **An FDE always lists open questions for the client**, such as who signs off the guardrails
+- **An engineer always lists open questions for the client**, such as who signs off the guardrails
   and who maintains the datasheets.
 
-### Link to the FDE role
-The vacancy says the FDE works on site with client teams "to identify the use cases where agents
-add the most value" and explains "results and trade-offs to client management in plain language".
+### Link to client work
+In client work, the first job is to identify, together with the client's team, the use cases
+where agents add the most value, and to explain results and trade-offs to management in plain language.
 The use-case brief is exactly that conversation, written down.
 
-### Possible interview questions
+### Review questions
 - *How do you approach building and deploying an AI agent with a customer?*
   Start with the problem and contact mix → pick use cases → check data readiness → define
   guardrails and success metrics → build → test against an evaluation set → pilot → go-live →
@@ -269,15 +269,15 @@ full load succeeded the first time.
 | `STRING_TOO_LONG` on `Connection_Size__c` | 4 insulation values longer than Text(30) | Shortened the values in the generator |
 | `Account.Type = 'Customer'` not a valid value | Unrestricted picklist accepts anything | Use the standard value `Customer - Direct` |
 
-### Link to the FDE role
-"The agent is only as good as the data" (brief, section 7). An FDE spends a large part of an
+### Link to client work
+"The agent is only as good as the data" (brief, section 7). An engineer spends a large part of an
 engagement on the data foundation: modelling, permissions, and getting clean data into the org.
 Debugging in a client's org works the same way: form a hypothesis, test it with a small
 diagnostic instead of guessing, and look for the root cause behind the noisy error. Security
 constraints such as token redaction are not obstacles to work around; the design should respect
 them.
 
-### Possible interview questions
+### Review questions
 - *Why extend standard objects (Order, Case, Opportunity) instead of building custom objects?*
 - *You deployed a new field but nobody can see it. What is the cause, and how do you fix it properly?*
 - *Why use permission sets instead of editing profiles?*
@@ -371,7 +371,7 @@ All 5 checks pass: the 4 tests plus "b and c return an identical message".
 
 ### What I learned
 - **Why a Flow for an agent action:** Flow is declarative. An admin can read, change and
-  debug it in Flow Builder without writing code, which matters after the FDE has left.
+  debug it in Flow Builder without writing code, which matters after the engineer has left.
   Agentforce can use an autolaunched flow directly as an agent action, and the input/output
   variables become the action's interface. I wrote a clear description on every variable,
   because the agent relies on those to decide what to pass in and how to read the result.
@@ -434,14 +434,14 @@ matches the org exactly. Two caveats:
   In a client's production org, settings can make deployed flows inactive or require test
   coverage, so check that before a client deployment.
 
-### Link to the FDE role
-Agent actions are where an FDE turns business rules into safe, testable building blocks. The
+### Link to client work
+Agent actions are where an engineer turns business rules into safe, testable building blocks. The
 key judgement is **what to enforce deterministically** (data access, in the action) and **what
 to leave to the model** (the conversation). Building in a tool the client's admins know (Flow),
 keeping it in Git, and proving the guardrail with automated API tests is the kind of evidence a
 client's security and architecture reviewers ask for.
 
-### Possible interview questions
+### Review questions
 - *Why did you build this action as a Flow and not in Apex? When would you choose Apex instead?*
 - *How do you make sure an agent cannot show one customer another customer's data?*
 - *Why enforce the guardrail in the action instead of in the agent's instructions?*
@@ -641,14 +641,14 @@ Run in the builder's Preview, with the trace open for every message.
 | Escalation goes nowhere real | `escalate_to_human` works in Preview, but real routing to a human needs Omni-Channel and a messaging channel, which this Developer org does not have set up |
 | Identity comes from the chat | The customer number is typed by the user. The flow guarantees one customer never sees another's orders *for that number*, but anyone who knows a customer number and an order number can ask. In production the customer must come from the logged-in portal user (User → Contact → Account), never from the conversation |
 
-### Link to the FDE role
-This step is the core of FDE work: take a vendor template, cut it down to the client's use case,
+### Link to client work
+This step is the core of client delivery work: take a vendor template, cut it down to the client's use case,
 connect it to the client's own business logic, and prove it works with the client's real users
 and permissions. Most of the time went into debugging routing, permissions and configuration,
-not into writing prompts. Reading the trace and finding the root cause is what an FDE does on
+not into writing prompts. Reading the trace and finding the root cause is what an engineer does on
 site when an agent "does something strange" in front of the client.
 
-### Possible interview questions
+### Review questions
 - *How did you build the agent, and why did you start from a template?*
   From the Agentforce Service Agent template, because it brings tested routing, escalation and
   off-topic handling. Then I removed everything outside the brief, including Cancel Order and an
@@ -968,9 +968,9 @@ then does not happen.
 | Assignments outside Git | Handled by `scripts/setup-agent-permissions.ps1`; not yet run in a second org |
 | Product2 field access is inactive | The Product2 field permissions in `Delta_Agent_Access` take effect when Product2 object read is added in Step 6b |
 
-### Link to the FDE role
+### Link to client work
 Write actions are where an agent can do real damage: duplicate cases, cases on the wrong
-account, or a permission change that breaks the client's own staff. This step shows the FDE
+account, or a permission change that breaks the client's own staff. This step shows the engineer
 habits that prevent that:
 - check the platform (picklists, FLS, who uses a permission set) before building;
 - design per role;
@@ -978,7 +978,7 @@ habits that prevent that:
 - prove every behaviour with tests that measure the org and clean up after themselves;
 - when something looks wrong, verify with an independent source before changing a client's org.
 
-### Possible interview questions
+### Review questions
 - *How do you stop an agent from creating duplicate records?*
   Idempotency in the action: before creating a complaint case for an order, the flow looks for
   an open agent case on that order and returns its number instead. Test b) calls the action
@@ -1269,8 +1269,8 @@ plus a secret scan of 53 agent files including 12 decoded base64 blocks (clean).
 | GenWatt products found | 17 active sample products in the org | Usage check, deactivated, script, test q |
 | Regeneration would shift order dates | Dates relative to `date.today()` | `--only products`, diff-checked |
 
-### Link to the FDE role
-This step shows the full FDE loop on one use case:
+### Link to client work
+This step shows the full delivery loop on one use case:
 - choose the right architecture for the data (lookup, not RAG);
 - build guardrails into the action;
 - test against ground truth;
@@ -1281,7 +1281,7 @@ The two judgement calls a client would care about most: when a prompt fix does n
 the system, not the wording; and check what is already in the client's org before trusting a
 filter.
 
-### Possible interview questions
+### Review questions
 - *Why did you build a lookup flow instead of RAG for product questions?*
   The data is structured: a few spec fields and one datasheet per product. A lookup returns exact
   values that I can test against the source data, with field-level security and no index to
@@ -1541,7 +1541,7 @@ QR-0007 stay in the org as evidence of the Preview tests.
 | "circulatiepompen", "pumps" not found | Plural not contained in the singular | Stem rule in the shared subflow + irregular plurals as keywords |
 | Repeat answered from memory | The model reuses conversation context | Duplicate check in the flow, proven in a fresh session |
 
-### Link to the FDE role
+### Link to client work
 - **Design trade-offs a client cares about:**
   - No line items, because the agent never prices.
   - A duplicate rule that never blocks on sales' own work.
@@ -1554,7 +1554,7 @@ QR-0007 stay in the org as evidence of the Preview tests.
 - **Evidence over impressions:** a correct-looking repeat in Preview wasn't accepted as proof; the
   fresh-session test was.
 
-### Possible interview questions
+### Review questions
 - *Why didn't you create Opportunity Products for the requested items?*
   A line item needs a price book entry and a unit price, and the agent must never touch prices.
   So the product and quantity go into custom fields, and the sales colleague adds the priced
@@ -1780,7 +1780,7 @@ Test 4 ran without instructions; tests 5–8 ran in the Project "Delta Service A
 | Datasheet translated | No rule for the datasheet language; model changed | Step 8: quote literally, fix the model |
 | Redaction not saved | Same file saved again | Checked size and image before adding |
 
-### Link to the FDE role
+### Link to client work
 - **Two agent stacks on one guardrail layer.** Clients ask "Agentforce or Claude?". With the rules
   in the flows, the answer is "both can use the same safe actions", and the comparison table shows
   where each one is stronger.
@@ -1792,7 +1792,7 @@ Test 4 ran without instructions; tests 5–8 ran in the Project "Delta Service A
 - **Secret hygiene in a metadata-driven project:** a retrieve can pull credentials into the repo
   unless you plan for it.
 
-### Possible interview questions
+### Review questions
 - *How did you connect Claude to Salesforce data, and what can Claude actually do?*
   Through a custom Salesforce Hosted MCP server with two read-only tools, which are the same flows
   the Agentforce agent uses. Claude logs in with OAuth as a dedicated user whose token only has the
@@ -2039,7 +2039,7 @@ mostly reads the **subagent descriptions**.
 - **Monitor** escalation rate, containment, action latency and the "not found" rate (a rising
   "not found" rate means customers use words the search doesn't know).
 
-### Link to the FDE role
+### Link to client work
 - **Evaluation as a deliverable:** a client can't judge "the agent works" without agreed
   criteria and a repeatable test set; this is what makes go-live a decision instead of a feeling.
 - **Fix, then prove nothing broke:** the regression run is what lets a client accept a new version.
@@ -2048,7 +2048,7 @@ mostly reads the **subagent descriptions**.
 - **Careful with production data:** baseline, check, delete by Id, verify. The same discipline as
   in a client's sandbox.
 
-### Possible interview questions
+### Review questions
 - *How do you know your agent is good enough to go live?*
   I agree the criteria with the business before testing: accuracy, correct hand-off, zero leaks,
   containment. Then I run a fixed test set against them. v4 met three of the four and failed

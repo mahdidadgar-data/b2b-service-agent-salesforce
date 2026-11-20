@@ -1,15 +1,10 @@
 # CLAUDE.md: B2B Service Agent on Salesforce
 
 ## Why this project exists
-Mahdi Dadgar is preparing for an interview on **Friday 20 November 2026** for the
-**Agentforce Forward Deployed Engineer (FDE)** role at Nextview Consulting, a Salesforce
-and Anthropic partner. The interviewer (Daan Elshout, Data, Analytics & AI Consultant) will
-cover background, technical experience, **how to approach building and deploying AI agents
-with customers**, and what FDE work looks like in practice.
-
-This project is a learning and portfolio project. It follows the full FDE workflow end to end
-so Mahdi can learn the Salesforce/Agentforce stack and answer those questions with concrete
-examples. Present it honestly as a learning project, not client work.
+This is a learning and portfolio project by Mahdi Dadgar. It follows the full delivery workflow of an
+AI agent for a client end to end (business problem, data, actions, agent, guardrails, evaluation), so
+Mahdi can learn the Salesforce/Agentforce and Claude stack with concrete examples. Present it honestly
+as a learning project, not client work.
 
 ## How to work with Mahdi
 - Act as a senior AI engineer who teaches and builds alongside him. Explain *why* before *how*.
@@ -127,7 +122,7 @@ becomes the main demo.
 | 5–6 | Nov 15–16 | Agentforce agent: topics, actions, guardrails |
 | 7 | Nov 17 | Claude agent via MCP on the same data |
 | 8 | Nov 18 | Tests, evaluation, monitoring report, README |
-| 9 | Nov 19 | Demo rehearsal + interview answers |
+| 9 | Nov 19 | Demo rehearsal + project overview |
 
 ## Conventions
 - Never commit secrets (`.env`, auth files, API keys). Use `.env` locally and keep `.env.example` in Git.
@@ -147,5 +142,5 @@ becomes the main demo.
   in a real project, run these tests in a sandbox. Don't use C-1011 + DP-200 or C-1011 + DIS-VLV-BS-DN25 in
   tests (open Preview requests QR-0003 and QR-0007).
 - **Learning log:** after each step, add a section to `docs/learning-log.md` (what was done, what was
-  learned, problems and solutions, link to the FDE role, possible interview questions). At the end it
-  becomes a printable PDF with a full interview-question section. Keep the steps in order (Step 1, 2, 3, ...).
+  learned, problems and solutions, link to client work, review questions). At the end it
+  becomes a printable PDF with a review-question section. Keep the steps in order (Step 1, 2, 3, ...).
